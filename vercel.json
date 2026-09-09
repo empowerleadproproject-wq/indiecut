@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/content-agent/cron",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
