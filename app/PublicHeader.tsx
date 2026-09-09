@@ -1,5 +1,5 @@
 export default function PublicHeader(){
- const links=[['/','HOME'],['/movies','MOVIES'],['/tv','TV'],['/music','MUSIC'],['/culture','CULTURE'],['/independent','INDEPENDENT'],['/articles','LATEST'],['/admin','BACK OFFICE']];
+ const links=[['/','HOME'],['/movies','MOVIES'],['/tv','TV'],['/music','MUSIC'],['/culture','CULTURE'],['/independent','INDEPENDENT'],['/articles','LATEST']];
  return <header className="ic-public-header">
   <div className="ic-public-masthead">
    <a className="ic-public-brand" href="/">INDIE CUT</a>
