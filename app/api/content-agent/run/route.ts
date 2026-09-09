@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '../../../../lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { isAdminEmail } from '../../../../lib/admin';
 
 export const dynamic='force-dynamic';
 export const maxDuration=60;
@@ -12,7 +14,15 @@ function parseJson(text:string){return JSON.parse(String(text||'').trim().replac
 async function readConfig(supabase:any){const {data}=await supabase.from('site_settings').select('setting_value').eq('setting_key',KEY).maybeSingle();if(!data?.setting_value)return DEFAULTS;try{return {...DEFAULTS,...JSON.parse(data.setting_value)}}catch{return DEFAULTS}}
 
 export async function POST(request:Request){
- const supabase=createClient();
+ const authClient=createClient();
+ const {data:{user}}=await authClient.auth.getUser();
+ if(!user)return NextResponse.json({error:'Please sign in to the Indie Cut Back Office.'},{status:401});
+ if(!isAdminEmail(user.email))return NextResponse.json({error:'Unauthorized admin account.'},{status:403});
+
+ const serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY;
+ const supabaseUrl=process.env.NEXT_PUBLIC_SUPABASE_URL;
+ if(!serviceKey||!supabaseUrl)return NextResponse.json({error:'Supabase admin environment variables are not configured.'},{status:503});
+ const supabase=createServiceClient(supabaseUrl,serviceKey,{auth:{persistSession:false,autoRefreshToken:false}});
  const config=await readConfig(supabase);
  if(!config?.enabled)return NextResponse.json({error:'The Indie Cut content agent is OFF. Turn it on first.'},{status:409});
  const apiKey=process.env.OPENAI_API_KEY;if(!apiKey)return NextResponse.json({error:'OPENAI_API_KEY is not configured.'},{status:503});
