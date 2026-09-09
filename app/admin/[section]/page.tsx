@@ -5,6 +5,7 @@ import { isAdminEmail } from '../../../lib/admin';
 import SectionManager from '../SectionManager';
 import FooterSettings from '../FooterSettings';
 import ContentAgentScheduler from '../ContentAgentScheduler';
+import SocialAgentSettings from '../SocialAgentSettings';
 
 const sections:Record<string,{title:string;intro:string}>={
  homepage:{title:'Homepage',intro:'Control hero content, featured stories and homepage presentation.'},
@@ -13,6 +14,7 @@ const sections:Record<string,{title:string;intro:string}>={
  music:{title:'Music',intro:'Add songs, releases, performances and music media.'},
  'video-media':{title:'Video & Media',intro:'Upload video and photography for stories, artists and homepage placements.'},
  'content-agent':{title:'AI Content Agent',intro:'Research current entertainment stories, verify multiple sources, save drafts for review, and schedule automatic research.'},
+ 'social-agent':{title:'Social Media Agent',intro:'Automatically turn published Indie Cut stories into platform-ready social posts.'},
  advertising:{title:'Advertising',intro:'Manage ad creative, placements, destination links and campaign schedules.'},
  authors:{title:'Authors & Editors',intro:'Manage editorial profiles, headshots, bios and bylines.'},
  analytics:{title:'Analytics',intro:'Review Indie Cut publication activity.'},
@@ -25,5 +27,5 @@ export default async function AdminSectionPage({params}:{params:{section:string}
  const section=sections[params.section];if(!section)notFound();
  const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
  if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');
- return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header><SectionManager section={params.section}/>{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
+ return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{params.section==='social-agent'?<SocialAgentSettings/>:<SectionManager section={params.section}/>} {params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
 }
