@@ -10,6 +10,7 @@ const modules=[
  {slug:'artists',label:'Artists & People',description:'Manage actors, musicians, filmmakers, creators and emerging talent profiles.'},
  {slug:'music',label:'Music',description:'Add songs, performances, releases, covers and artist media.'},
  {slug:'video-media',label:'Video & Media',description:'Upload videos, images, thumbnails and editorial media.'},
+ {slug:'breaking-news',label:'Breaking News Radar',description:'Scan live sources for fresh entertainment developments, rank urgency and create verified drafts fast.'},
  {slug:'content-agent',label:'AI Content Agent',description:'Research current entertainment news, verify sources and create review-ready drafts.'},
  {slug:'social-agent',label:'Social Media Agent',description:'Turn published stories into Facebook, Instagram and TikTok-ready social posts automatically.'},
  {slug:'advertising',label:'Advertising',description:'Upload image or video ads, set placements, links, schedules and active campaigns.'},
@@ -44,7 +45,7 @@ export default async function AdminPage(){
   </aside>
   <section className="ic-admin-main">
    <header className="ic-admin-topbar"><div><div className="ic-admin-eyebrow">INDIE CUT EDITORIAL</div><h1>Back Office</h1><p>Run the entire entertainment publication from one control room: stories, artists, music, video, advertising, AI research, social publishing, audience and settings.</p></div><div className="ic-admin-user"><span>CF</span><div><strong>Administrator</strong><br/><small>{user.email}</small></div></div></header>
-   <section className="ic-admin-stats"><article><span>Published stories</span><strong>{published||0}</strong><small>Live editorial content</small></article><article><span>Artists & people</span><strong>{artists||0}</strong><small>Talent profiles</small></article><article><span>Media assets</span><strong>{media||0}</strong><small>Music, images and video</small></article><article><span>Active ads</span><strong>{adCount}</strong><small>Current ad inventory</small></article></section>
+   <section className="ic-admin-stats"><article><span>Published stories</span><strong>{published||0}</strong><small>Live editorial content</small></article><article><span>Artists & people</span><strong>{artists||0}</strong><small>Talent profiles in your database</small></article><article><span>Media assets</span><strong>{media||0}</strong><small>Music, images and video</small></article><article><span>Active ads</span><strong>{adCount}</strong><small>Current ad inventory</small></article></section>
    <div className="ic-admin-section-head"><div><div className="ic-admin-eyebrow">CONTROL CENTER</div><h2>Manage Indie Cut</h2></div><Link className="ic-view-site" href="/">View live publication ↗</Link></div>
    <section className="ic-admin-modules">{modules.map(m=><Link className="ic-admin-module" href={`/admin/${m.slug}`} key={m.slug}><div className="ic-admin-icon">IC</div><h3>{m.label}</h3><p>{m.description}</p><span>Open →</span></Link>)}</section>
   </section>
