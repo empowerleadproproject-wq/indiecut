@@ -1,17 +1,51 @@
 import PublicHeader from './PublicHeader';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
+import {unstable_noStore as noStore} from 'next/cache';
 
+export const dynamic='force-dynamic';
 export const revalidate=0;
 function video(url?:string|null){return Boolean(url&&/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url))}
-function Media({url,alt}:{url:string,alt:string}){return video(url)?<video src={url} autoPlay muted loop playsInline controls={false}/>:<img src={url} alt={alt}/>}
+function Media({url,alt,className}:{url:string,alt:string,className?:string}){return video(url)?<video className={className} src={url} autoPlay muted loop playsInline controls={false}/>:<img className={className} src={url} alt={alt}/>}
+function shuffled<T>(items:T[]){const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
+function isLiveAd(a:any,now:string){return a?.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now)}
+
 export default async function Home(){
+ noStore();
  const db=createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
- const [{data:stories},{data:homeRow},{data:adRow}]=await Promise.all([
-  db.from('articles').select('*').eq('status','published').eq('verification_status','verified').order('published_at',{ascending:false}).limit(12),
-  db.from('site_settings').select('setting_value').eq('setting_key','admin_homepage').maybeSingle(),
+ const [{data:storiesData},{data:adRow}]=await Promise.all([
+  db.from('articles').select('*').eq('status','published').eq('verification_status','verified').order('published_at',{ascending:false}).limit(18),
   db.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle()
  ]);
- let home:any={};let ads:any[]=[];try{home=JSON.parse(homeRow?.setting_value||'{}')}catch{}try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}
- const now=new Date().toISOString().slice(0,10);const liveAds=ads.filter(a=>a.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now));const homeAd=liveAds.find(a=>a.placement==='homepage');
- return <main className="site-shell"><PublicHeader/><section className="hero">{home.hero_media_url&&<div className="hero-media"><Media url={home.hero_media_url} alt="Indie Cut"/></div>}<div className="kicker">{home.hero_eyebrow||'ENTERTAINMENT · CULTURE · INDEPENDENT VOICES'}</div><h1>{home.hero_headline||'The stories moving film, television, music and culture.'}</h1><p>{home.hero_subheadline||'Indie Cut covers verified entertainment news, emerging creators, independent projects and the people shaping culture — without rumor-driven reporting.'}</p></section>{homeAd&&<section className="ic-public-ad"><span>ADVERTISEMENT</span><a href={homeAd.destination_url||'#'}>{homeAd.creative_url&&(video(homeAd.creative_url)?<video src={homeAd.creative_url} autoPlay muted loop playsInline/>:<img src={homeAd.creative_url} alt={homeAd.advertiser||'Advertisement'}/>)}</a></section>}<section className="grid">{stories?.length?stories.map((s:any)=><article className="card" key={s.id}>{s.featured_media_url&&<a href={`/articles/${s.slug}`}><Media url={s.featured_media_url} alt={s.headline}/></a>}<div className="kicker">{s.category||'INDIE CUT'}</div><a href={`/articles/${s.slug}`}><h2>{s.headline}</h2></a>{s.subheadline&&<p>{s.subheadline}</p>}<a href={`/articles/${s.slug}`}><strong>READ STORY →</strong></a></article>):<article className="card"><div className="kicker">INDIE CUT</div><h2>No published stories yet.</h2><p>Once stories are published from the Back Office, they will appear here.</p></article>}</section><footer className="footer">© {new Date().getFullYear()} Indie Cut · Entertainment · Culture · Independent Voices</footer></main>
+ const stories=storiesData||[];
+ let ads:any[]=[];try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}
+ const now=new Date().toISOString().slice(0,10);
+ const liveAds=ads.filter(a=>isLiveAd(a,now));
+ const rightRailAds=shuffled(liveAds.filter(a=>['right-rail','homepage'].includes(a.placement))).slice(0,3);
+ const trendingPool=stories.slice(0,Math.min(6,stories.length));
+ const lead=trendingPool.length?trendingPool[Math.floor(Math.random()*trendingPool.length)]:null;
+ const latest=stories.filter(s=>s.id!==lead?.id).slice(0,7);
+ const below=stories.filter(s=>s.id!==lead?.id).slice(7,16);
+
+ return <main className="site-shell ic-homepage"><PublicHeader/>
+  <div className="ic-breaking-bar"><span>INDIE CUT TRENDING</span><strong>{lead?.headline||'Entertainment, culture and independent voices'}</strong></div>
+  <section className="ic-home-main">
+   <div className="ic-home-lead-column">
+    {lead?<article className="ic-lead-story">
+      <div className="ic-trending-badge">TRENDING</div>
+      {lead.featured_media_url&&<a href={`/articles/${lead.slug}`} className="ic-lead-media"><Media url={lead.featured_media_url} alt={lead.headline}/></a>}
+      <div className="ic-lead-category">{String(lead.category||'ENTERTAINMENT').toUpperCase()}</div>
+      <a href={`/articles/${lead.slug}`}><h1>{lead.headline}</h1></a>
+      {lead.subheadline&&<p>{lead.subheadline}</p>}
+      <div className="ic-lead-byline">{lead.author_name?`BY ${String(lead.author_name).toUpperCase()}`:'INDIE CUT EDITORIAL'}</div>
+     </article>:<article className="ic-lead-story"><div className="ic-trending-badge">TRENDING</div><h1>Indie Cut</h1><p>Published stories will appear here.</p></article>}
+   </div>
+   <aside className="ic-latest-rail">
+    <h2>LATEST NEWS</h2>
+    <div className="ic-latest-list">{latest.map((s:any)=><a href={`/articles/${s.slug}`} key={s.id} className="ic-latest-item"><div><span>{String(s.category||'NEWS').toUpperCase()}</span>{s.published_at&&<time>{new Date(s.published_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</time>}</div><strong>{s.headline}</strong></a>)}</div>
+    {rightRailAds.map((ad:any,i:number)=><div className="ic-rail-ad" key={ad._id||ad.id||i}><span>ADVERTISEMENT</span><a href={ad.destination_url||'#'} target="_blank" rel="noreferrer">{ad.creative_url&&(video(ad.creative_url)?<video src={ad.creative_url} autoPlay muted loop playsInline/>:<img src={ad.creative_url} alt={ad.advertiser||'Advertisement'}/>)}</a></div>)}
+   </aside>
+  </section>
+  {below.length>0&&<section className="ic-home-sections"><div className="ic-section-title"><span>MORE FROM INDIE CUT</span></div><div className="ic-story-grid">{below.map((s:any)=><article key={s.id}><a href={`/articles/${s.slug}`}>{s.featured_media_url&&<Media url={s.featured_media_url} alt={s.headline}/>}<span>{String(s.category||'NEWS').toUpperCase()}</span><h3>{s.headline}</h3>{s.subheadline&&<p>{s.subheadline}</p>}</a></article>)}</div></section>}
+  <footer className="footer">© {new Date().getFullYear()} Indie Cut · Entertainment · Culture · Independent Voices</footer>
+ </main>
 }
