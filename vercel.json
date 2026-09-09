@@ -3,6 +3,10 @@
     {
       "path": "/api/content-agent/cron",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/breaking-news/cron",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
