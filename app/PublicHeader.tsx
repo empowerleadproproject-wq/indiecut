@@ -1,0 +1,1 @@
+export default function PublicHeader(){return <header className="topbar"><a className="brand" href="/">INDIE CUT</a><nav className="nav"><a href="/movies">MOVIES</a><a href="/tv">TV</a><a href="/music">MUSIC</a><a href="/culture">CULTURE</a><a href="/independent">INDEPENDENT</a><a href="/articles">LATEST</a></nav></header>}
