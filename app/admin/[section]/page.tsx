@@ -3,6 +3,7 @@ import { notFound,redirect } from 'next/navigation';
 import { createClient } from '../../../lib/supabase/server';
 import { isAdminEmail } from '../../../lib/admin';
 import SectionManager from '../SectionManager';
+import FooterSettings from '../FooterSettings';
 
 const sections:Record<string,{title:string;intro:string}>={
  homepage:{title:'Homepage',intro:'Control hero content, featured stories and homepage presentation.'},
@@ -16,12 +17,12 @@ const sections:Record<string,{title:string;intro:string}>={
  analytics:{title:'Analytics',intro:'Review Indie Cut publication activity.'},
  'media-library':{title:'Media Library',intro:'Browse and add reusable image and video assets.'},
  subscribers:{title:'Email Subscribers',intro:'Manage the Indie Cut reader list.'},
- settings:{title:'Site Settings',intro:'Control publication-wide brand, navigation and social settings.'}
+ settings:{title:'Site Settings',intro:'Control publication-wide brand, navigation, footer and social settings.'}
 };
 export const dynamic='force-dynamic';
 export default async function AdminSectionPage({params}:{params:{section:string}}){
  const section=sections[params.section];if(!section)notFound();
  const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
  if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');
- return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header><SectionManager section={params.section}/></main>
+ return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header><SectionManager section={params.section}/>{params.section==='settings'&&<FooterSettings/>}</main>
 }
