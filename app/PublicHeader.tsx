@@ -1,1 +1,13 @@
-export default function PublicHeader(){return <><header className="ic-public-masthead"><a className="ic-public-brand" href="/">INDIE CUT</a></header><nav className="ic-public-nav"><a href="/">HOME</a><a href="/movies">MOVIES</a><a href="/tv">TV</a><a href="/music">MUSIC</a><a href="/culture">CULTURE</a><a href="/independent">INDEPENDENT</a><a href="/articles">LATEST</a><a href="/admin">BACK OFFICE</a></nav></>}
+export default function PublicHeader(){
+ const links=[['/','HOME'],['/movies','MOVIES'],['/tv','TV'],['/music','MUSIC'],['/culture','CULTURE'],['/independent','INDEPENDENT'],['/articles','LATEST'],['/admin','BACK OFFICE']];
+ return <header className="ic-public-header">
+  <div className="ic-public-masthead">
+   <a className="ic-public-brand" href="/">INDIE CUT</a>
+   <details className="ic-mobile-menu">
+    <summary aria-label="Open menu"><span></span><span></span><span></span></summary>
+    <nav>{links.map(([href,label])=><a key={href} href={href}>{label}</a>)}</nav>
+   </details>
+  </div>
+  <nav className="ic-public-nav">{links.map(([href,label])=><a key={href} href={href}>{label}</a>)}</nav>
+ </header>
+}
