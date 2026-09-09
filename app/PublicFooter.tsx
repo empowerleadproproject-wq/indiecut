@@ -1,3 +1,4 @@
+import './footer.css';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
 
 export const dynamic='force-dynamic';
