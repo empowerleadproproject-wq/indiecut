@@ -1,3 +1,4 @@
+import './home.css';
 import PublicHeader from './PublicHeader';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
 import {unstable_noStore as noStore} from 'next/cache';
