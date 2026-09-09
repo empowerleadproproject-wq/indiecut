@@ -13,21 +13,24 @@ function isLiveAd(a:any,now:string){return a?.active!==false&&(!a.start_date||a.
 export default async function Home(){
  noStore();
  const db=createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
- const [{data:storiesData},{data:adRow}]=await Promise.all([
-  db.from('articles').select('*').eq('status','published').eq('verification_status','verified').order('published_at',{ascending:false}).limit(18),
-  db.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle()
+ const [{data:storiesData},{data:adRow},{data:homeRow}]=await Promise.all([
+  db.from('articles').select('*').eq('status','published').eq('verification_status','verified').order('published_at',{ascending:false}).limit(24),
+  db.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle(),
+  db.from('site_settings').select('setting_value').eq('setting_key','admin_homepage').maybeSingle()
  ]);
  const stories=storiesData||[];
- let ads:any[]=[];try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}
+ let ads:any[]=[];let home:any={};try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}try{home=JSON.parse(homeRow?.setting_value||'{}')}catch{}
+ const accent=String(home.accent_color||'#d71920');
  const now=new Date().toISOString().slice(0,10);
  const liveAds=ads.filter(a=>isLiveAd(a,now));
  const rightRailAds=shuffled(liveAds.filter(a=>['right-rail','homepage'].includes(a.placement))).slice(0,3);
  const trendingPool=stories.slice(0,Math.min(6,stories.length));
  const lead=trendingPool.length?trendingPool[Math.floor(Math.random()*trendingPool.length)]:null;
- const latest=stories.filter(s=>s.id!==lead?.id).slice(0,7);
- const below=stories.filter(s=>s.id!==lead?.id).slice(7,16);
+ const secondary=stories.filter(s=>s.id!==lead?.id);
+ const latest=secondary.slice(0,7);
+ const below=secondary.slice(0,12);
 
- return <main className="site-shell ic-homepage"><PublicHeader/>
+ return <main className="site-shell ic-homepage" style={{'--ic-accent':accent} as any}><PublicHeader/>
   <div className="ic-breaking-bar"><span>INDIE CUT TRENDING</span><strong>{lead?.headline||'Entertainment, culture and independent voices'}</strong></div>
   <section className="ic-home-main">
    <div className="ic-home-lead-column">
