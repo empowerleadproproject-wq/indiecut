@@ -1,22 +1,40 @@
 import './home.css';
+import type {Metadata} from 'next';
 import PublicHeader from './PublicHeader';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
 import {unstable_noStore as noStore} from 'next/cache';
 
 export const dynamic='force-dynamic';
 export const revalidate=0;
+const SITE_URL=(process.env.NEXT_PUBLIC_SITE_URL||'https://indiecut.vercel.app').replace(/\/$/,'');
+function db(){return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}})}
 function video(url?:string|null){return Boolean(url&&/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url))}
 function Media({url,alt,className}:{url:string,alt:string,className?:string}){return video(url)?<video className={className} src={url} autoPlay muted loop playsInline controls={false}/>:<img className={className} src={url} alt={alt}/>}
 function shuffled<T>(items:T[]){const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
 function isLiveAd(a:any,now:string){return a?.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now)}
 
+export async function generateMetadata():Promise<Metadata>{
+ const client=db();
+ const {data}=await client.from('articles').select('headline,subheadline,featured_media_url').eq('status','published').eq('verification_status','verified').not('featured_media_url','is',null).order('published_at',{ascending:false}).limit(1).maybeSingle();
+ const image=data?.featured_media_url&&!video(data.featured_media_url)?data.featured_media_url:undefined;
+ const title='Indie Cut | Entertainment, Culture & Independent Voices';
+ const description='Verified entertainment news, movies, TV, music, culture and independent voices.';
+ return {
+  title,
+  description,
+  alternates:{canonical:SITE_URL},
+  openGraph:{type:'website',siteName:'Indie Cut',title,description,url:SITE_URL,images:image?[{url:image,alt:data?.headline||'Indie Cut'}]:undefined},
+  twitter:{card:image?'summary_large_image':'summary',title,description,images:image?[image]:undefined}
+ };
+}
+
 export default async function Home(){
  noStore();
- const db=createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}});
+ const client=db();
  const [{data:storiesData},{data:adRow},{data:homeRow}]=await Promise.all([
-  db.from('articles').select('*').eq('status','published').eq('verification_status','verified').order('published_at',{ascending:false}).limit(24),
-  db.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle(),
-  db.from('site_settings').select('setting_value').eq('setting_key','admin_homepage').maybeSingle()
+  client.from('articles').select('*').eq('status','published').eq('verification_status','verified').order('published_at',{ascending:false}).limit(24),
+  client.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle(),
+  client.from('site_settings').select('setting_value').eq('setting_key','admin_homepage').maybeSingle()
  ]);
  const stories=storiesData||[];
  let ads:any[]=[];let home:any={};try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}try{home=JSON.parse(homeRow?.setting_value||'{}')}catch{}
