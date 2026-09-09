@@ -5,13 +5,27 @@ import {isAdminEmail} from '../../../../../lib/admin';
 export const dynamic='force-dynamic';
 
 export async function GET(request:Request){
- const auth=createClient();const {data:{user}}=await auth.auth.getUser();
+ const auth=createClient();
+ const {data:{user}}=await auth.auth.getUser();
  if(!user||!isAdminEmail(user.email))return NextResponse.redirect(new URL('/admin/login',request.url));
- const appId=process.env.META_APP_ID;if(!appId)return NextResponse.redirect(new URL('/admin/social-agent?meta_error=META_APP_ID+is+missing+in+Vercel',request.url));
+
+ const appId=process.env.META_APP_ID;
+ const configId=process.env.META_LOGIN_CONFIG_ID;
+ if(!appId)return NextResponse.redirect(new URL('/admin/social-agent?meta_error=META_APP_ID+is+missing+in+Vercel',request.url));
+ if(!configId)return NextResponse.redirect(new URL('/admin/social-agent?meta_error=META_LOGIN_CONFIG_ID+is+missing.+Create+a+Facebook+Login+for+Business+configuration+in+Meta+and+add+its+Configuration+ID+to+Vercel.',request.url));
+
  const origin=process.env.NEXT_PUBLIC_SITE_URL||new URL(request.url).origin;
  const redirectUri=`${origin.replace(/\/$/,'')}/api/social-agent/meta/callback`;
  const state=crypto.randomUUID();
- const response=NextResponse.redirect(`https://www.facebook.com/v23.0/dialog/oauth?client_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent('pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish')}`);
+ const oauth=new URL('https://www.facebook.com/v23.0/dialog/oauth');
+ oauth.searchParams.set('client_id',appId);
+ oauth.searchParams.set('redirect_uri',redirectUri);
+ oauth.searchParams.set('state',state);
+ oauth.searchParams.set('config_id',configId);
+ oauth.searchParams.set('response_type','code');
+ oauth.searchParams.set('override_default_response_type','true');
+
+ const response=NextResponse.redirect(oauth.toString());
  response.cookies.set('indiecut_meta_oauth_state',state,{httpOnly:true,secure:true,sameSite:'lax',maxAge:600,path:'/'});
  return response;
 }
