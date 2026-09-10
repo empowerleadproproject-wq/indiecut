@@ -1,6 +1,7 @@
 import './globals.css';
 import './mobile.css';
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import WebsiteAnalyticsTracker from './WebsiteAnalyticsTracker';
 
 export const metadata: Metadata = {
@@ -9,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({children}:{children:React.ReactNode}){
-  return <html lang="en"><body><WebsiteAnalyticsTracker/>{children}</body></html>;
+  return <html lang="en"><body><Suspense fallback={null}><WebsiteAnalyticsTracker/></Suspense>{children}</body></html>;
 }
