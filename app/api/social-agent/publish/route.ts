@@ -43,16 +43,20 @@ async function postFacebook(article:any,caption:string,link:string,connection:Me
  return r.ok?{ok:true,id:j.id}:{ok:false,reason:j?.error?.message||'Facebook post failed'};
 }
 
-async function postInstagram(article:any,caption:string,link:string,connection:MetaConnection){
+async function postInstagram(article:any,music:any,caption:string,link:string,connection:MetaConnection){
  const ig=connection.instagram_user_id||process.env.INSTAGRAM_USER_ID;
  const token=connection.facebook_page_access_token||process.env.META_PAGE_ACCESS_TOKEN;
  if(!ig||!token)return {ok:false,reason:'Instagram not connected'};
- const source=String(article.featured_media_url||'').trim();
- if(!/^https?:\/\//i.test(source))return {ok:false,reason:'Instagram auto-post requires public featured media on the article'};
- const finalCaption=`${caption}${link&&!caption.includes(link)?`\n\n${link}`:''}`;
- const video=isVideoUrl(source);
+ const featured=String(article.featured_media_url||'').trim();
+ const musicMedia=String(music?.media_url||music?.spotify||music?.cover_url||'').trim();
+ const source=featured||musicMedia;
+ if(!/^https?:\/\//i.test(source))return {ok:false,reason:'Instagram auto-post requires public article or linked music media'};
+ let finalCaption=`${caption}${link&&!caption.includes(link)?`\n\n${link}`:''}`;
+ const spotify=String(music?.spotify||'').trim();
+ if(spotify&&/^https?:\/\//i.test(spotify)&&!finalCaption.includes(spotify))finalCaption+=`\n\nListen on Spotify: ${spotify}`;
+ const video=isVideoUrl(featured||String(music?.media_url||''));
  const createBody=video
-  ? new URLSearchParams({access_token:token,media_type:'REELS',video_url:source,caption:finalCaption,share_to_feed:'true'})
+  ? new URLSearchParams({access_token:token,media_type:'REELS',video_url:featured||String(music?.media_url||''),caption:finalCaption,share_to_feed:'true'})
   : new URLSearchParams({access_token:token,image_url:`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}&v=${Date.now()}`,caption:finalCaption});
  const c=await fetch(`${GRAPH}/${ig}/media`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:createBody});
  const cj=await c.json().catch(()=>({}));
@@ -76,10 +80,11 @@ export async function POST(request:Request){
  const articleId=String(input.article_id||'');
  if(!articleId)return NextResponse.json({error:'Missing article_id'},{status:400});
 
- const [{data:article},{data:setting},{data:metaSetting}]=await Promise.all([
+ const [{data:article},{data:setting},{data:metaSetting},{data:musicSetting}]=await Promise.all([
   db.from('articles').select('*').eq('id',articleId).eq('status','published').maybeSingle(),
   db.from('site_settings').select('setting_value').eq('setting_key','admin_social_agent').maybeSingle(),
-  db.from('site_settings').select('setting_value').eq('setting_key','social_meta_connection').maybeSingle()
+  db.from('site_settings').select('setting_value').eq('setting_key','social_meta_connection').maybeSingle(),
+  db.from('site_settings').select('setting_value').eq('setting_key',`article_media_${articleId}`).maybeSingle()
  ]);
  if(!article)return NextResponse.json({error:'Published article not found'},{status:404});
 
@@ -87,13 +92,15 @@ export async function POST(request:Request){
  try{if(setting?.setting_value)settings={...settings,...JSON.parse(setting.setting_value)}}catch{}
  let connection:MetaConnection={};
  try{if(metaSetting?.setting_value)connection=JSON.parse(metaSetting.setting_value)||{}}catch{}
+ let music:any=null;
+ try{if(musicSetting?.setting_value)music=JSON.parse(musicSetting.setting_value)||null}catch{}
 
  if(!settings.enabled||!settings.auto_post_on_publish)return NextResponse.json({ok:true,skipped:'Social Media Agent auto-post is off.'});
  const link=settings.include_link===false?'':`${SITE_URL}/articles/${encodeURIComponent(article.slug)}`;
  const caption=await makeCaption(article,settings);
  const results:any={};
  if(settings.facebook)results.facebook=await postFacebook(article,caption,link,connection);
- if(settings.instagram)results.instagram=await postInstagram(article,caption,link,connection);
+ if(settings.instagram)results.instagram=await postInstagram(article,music,caption,link,connection);
  if(settings.tiktok)results.tiktok={ok:false,reason:process.env.TIKTOK_ACCESS_TOKEN&&process.env.TIKTOK_OPEN_ID?'TikTok connection detected; direct publishing requires the approved Content Posting flow for the selected media type.':'TikTok not connected'};
  await db.from('site_settings').upsert({setting_key:`social_post_${article.id}`,setting_value:JSON.stringify({article_id:article.id,headline:article.headline,created_at:new Date().toISOString(),results}),updated_at:new Date().toISOString()},{onConflict:'setting_key'});
  return NextResponse.json({ok:true,caption,results});
