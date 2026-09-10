@@ -1,7 +1,7 @@
 import {NextResponse} from 'next/server';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
-import {createClient} from '../../../../../lib/supabase/server';
-import {isAdminEmail} from '../../../../../lib/admin';
+import {createClient} from '../../../../lib/supabase/server';
+import {isAdminEmail} from '../../../../lib/admin';
 
 export const dynamic='force-dynamic';
 
@@ -15,7 +15,7 @@ function source(referrer:string|null){
   if(host.includes('bing.com'))return 'Bing';
   if(host.includes('tiktok.com'))return 'TikTok';
   if(host.includes('x.com')||host.includes('twitter.com'))return 'X';
-  if(host.includes('indiecut.vercel.app'))return 'Internal';
+  if(host.includes('indiecut.vercel.app')||host.includes('indiecut.info'))return 'Internal';
   return host;
  }catch{return 'Direct / Unknown'}
 }
