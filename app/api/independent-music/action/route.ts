@@ -20,6 +20,12 @@ async function adminDb(){
  return {db:createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})};
 }
 
+async function saveArticleMedia(db:any,articleId:string,lead:any){
+ const media={article_id:articleId,artist_name:String(lead.artist_name||'').trim(),title:String(lead.latest_release||'').trim(),media_url:playableUrl(lead),cover_url:validUrl(lead.image_url),spotify:validUrl(lead.spotify),youtube:validUrl(lead.youtube),soundcloud:validUrl(lead.soundcloud),bandcamp:validUrl(lead.bandcamp),updated_at:new Date().toISOString()};
+ await db.from('site_settings').upsert({setting_key:`article_media_${articleId}`,setting_value:JSON.stringify(media),updated_at:new Date().toISOString()},{onConflict:'setting_key'});
+ return media;
+}
+
 export async function POST(request:Request){
  const a=await adminDb();if(a.error)return a.error;const db=a.db!;
  const input=await request.json().catch(()=>({}));const action=String(input.action||'');const lead=input.artist||{};
@@ -35,8 +41,7 @@ export async function POST(request:Request){
  }
 
  if(action==='add_music'){
-  const mediaUrl=playableUrl(lead);
-  if(!mediaUrl)return NextResponse.json({error:'No verified release or listening URL is available for this artist.'},{status:400});
+  const mediaUrl=playableUrl(lead);if(!mediaUrl)return NextResponse.json({error:'No verified release or listening URL is available for this artist.'},{status:400});
   const title=String(lead.latest_release||`${name} — featured release`).trim();
   const {data:existing}=await db.from('media_items').select('id,title,artist_name').eq('media_type','music').ilike('artist_name',name).ilike('title',title).limit(1).maybeSingle();
   if(existing)return NextResponse.json({ok:true,existing:true,row:existing,message:`${title} is already in Music.`});
@@ -49,23 +54,19 @@ export async function POST(request:Request){
   const apiKey=process.env.OPENAI_API_KEY;if(!apiKey)return NextResponse.json({error:'OPENAI_API_KEY is not configured'},{status:503});
   const sources=Array.isArray(lead.sources)?lead.sources.map((x:any)=>validUrl(x)).filter(Boolean):[];
   const context=JSON.stringify({artist_name:name,genre:lead.genre,city:lead.city,independence_status:lead.independence_status,independence_note:lead.independence_note,why_trending:lead.why_trending,latest_release:lead.latest_release,latest_release_url:lead.latest_release_url,story_angle:lead.story_angle,sources});
-  const prompt=`You are an Indie Cut music editor. Re-check the current public web and write a factual, energetic music-news/profile draft about this rising artist. Use the supplied lead only as a starting point: ${context}. Verify all material claims with live web search. Do not invent quotes, numbers, label status, relationships, biography details or achievements. If independence cannot be confirmed, say that clearly rather than claiming the artist is independent. Write original copy for Indie Cut, with a sharp headline, concise subheadline, and 5-7 substantial paragraphs. Focus on why the artist matters now, the latest release, momentum and the supplied Indie Cut angle. Return ONLY valid JSON: {"headline":"","subheadline":"","body":"","subject_name":"","sources":["https://..."],"verification_status":"verified|not_verified","verification_note":""}.`;
+  const prompt=`You are an Indie Cut music editor. Re-check the current public web and write a factual, energetic music-news/profile article about this rising artist. Use the supplied lead only as a starting point: ${context}. Verify all material claims with live web search. Do not invent quotes, numbers, label status, relationships, biography details or achievements. If independence cannot be confirmed, say that clearly rather than claiming the artist is independent. Write original copy for Indie Cut, with a sharp headline, concise subheadline, and 5-7 substantial paragraphs. Focus on why the artist matters now, the latest release, momentum and the supplied Indie Cut angle. Return ONLY valid JSON: {"headline":"","subheadline":"","body":"","subject_name":"","sources":["https://..."],"verification_status":"verified|not_verified","verification_note":""}.`;
   const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:`Bearer ${apiKey}`,'content-type':'application/json'},body:JSON.stringify({model:'gpt-5.6-luna',tools:[{type:'web_search'}],input:prompt,max_output_tokens:10000})});
   const j=await r.json().catch(()=>({}));if(!r.ok)return NextResponse.json({error:j?.error?.message||'Article research failed'},{status:502});
   let story:any;try{story=parseJson(textFromResponse(j))}catch{return NextResponse.json({error:'Article writer returned invalid JSON'},{status:502})}
   if(String(story.verification_status||'').toLowerCase()!=='verified')return NextResponse.json({error:story.verification_note||'The article could not be sufficiently verified.'},{status:400});
   const headline=String(story.headline||'').trim();if(!headline)return NextResponse.json({error:'Article writer returned no headline'},{status:502});
-  const articleSlug=slug(headline);
-  const articleMedia=playableUrl(lead)||validUrl(lead.image_url)||null;
-  const {data:dupe}=await db.from('articles').select('id,headline,featured_media_url').eq('slug',articleSlug).maybeSingle();
-  if(dupe){
-   if(articleMedia&&dupe.featured_media_url!==articleMedia){await db.from('articles').update({featured_media_url:articleMedia,updated_at:new Date().toISOString()}).eq('id',dupe.id)}
-   return NextResponse.json({ok:true,existing:true,row:{...dupe,featured_media_url:articleMedia||dupe.featured_media_url},message:'Matching article already exists. The music/video has now been attached to it.'});
-  }
-  const verifiedSources=Array.isArray(story.sources)?story.sources.map((x:any)=>validUrl(x)).filter(Boolean):sources;
-  const payload={headline,slug:articleSlug,subheadline:String(story.subheadline||'').trim()||null,category:'music',subject_name:String(story.subject_name||name).trim(),body:String(story.body||'').trim(),featured_media_url:articleMedia,sources:verifiedSources,verification_status:'verified',status:'draft',published_at:null};
-  const {data,error}=await db.from('articles').insert(payload).select().single();if(error)return NextResponse.json({error:error.message},{status:400});
-  return NextResponse.json({ok:true,row:data,message:`Music article draft created for ${name} with playable music/video attached. Review it in Articles before publishing.`});
+  const articleSlug=slug(headline);const cover=validUrl(lead.image_url)||null;const verifiedSources=Array.isArray(story.sources)?story.sources.map((x:any)=>validUrl(x)).filter(Boolean):sources;
+  let {data:article}=await db.from('articles').select('*').eq('slug',articleSlug).maybeSingle();
+  if(!article){const {data:subjectMatch}=await db.from('articles').select('*').eq('category','music').ilike('subject_name',name).order('created_at',{ascending:false}).limit(1).maybeSingle();article=subjectMatch||null;}
+  const base={headline,slug:articleSlug,subheadline:String(story.subheadline||'').trim()||null,category:'music',subject_name:String(story.subject_name||name).trim(),body:String(story.body||'').trim(),featured_media_url:cover,sources:verifiedSources,verification_status:'verified',status:'published',published_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+  if(article){const {data:updated,error}=await db.from('articles').update(base).eq('id',article.id).select().single();if(error)return NextResponse.json({error:error.message},{status:400});await saveArticleMedia(db,article.id,lead);return NextResponse.json({ok:true,existing:true,row:updated,message:`${name} article updated with cover art and playable music/video and published live.`});}
+  const {data:created,error}=await db.from('articles').insert(base).select().single();if(error)return NextResponse.json({error:error.message},{status:400});await saveArticleMedia(db,created.id,lead);
+  return NextResponse.json({ok:true,row:created,message:`${name} article created with cover art and playable music/video and published live.`});
  }
 
  return NextResponse.json({error:'Unsupported action'},{status:400});
