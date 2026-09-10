@@ -24,13 +24,19 @@ async function postInstagram(article:any,caption:string,link:string,connection:M
  const ig=connection.instagram_user_id||process.env.INSTAGRAM_USER_ID;
  const token=connection.facebook_page_access_token||process.env.META_PAGE_ACCESS_TOKEN;
  if(!ig||!token)return {ok:false,reason:'Instagram not connected'};
- const image=String(article.featured_media_url||'');
- if(!/^https?:\/\//i.test(image)||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(image))return {ok:false,reason:'Instagram direct posting currently requires a public featured image on the article'};
+ const source=String(article.featured_media_url||'');
+ if(!/^https?:\/\//i.test(source)||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(source))return {ok:false,reason:'Instagram direct posting currently requires a public featured image on the article'};
+
  const finalCaption=`${caption}${link&& !caption.includes(link)?`\n\n${link}`:''}`;
+ // Social Pack manual posting must use the same Instagram-safe 4:5 image as auto-posting.
+ // Using the raw article image here was the reason manual Social Pack posts could crop badly
+ // and could diverge from the automatic publishing path.
+ const image=`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}&v=${Date.now()}`;
  const createBody=new URLSearchParams({access_token:token,image_url:image,caption:finalCaption});
  const c=await fetch(`https://graph.facebook.com/v23.0/${ig}/media`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:createBody});
  const cj=await c.json().catch(()=>({}));
  if(!c.ok||!cj.id)return {ok:false,reason:cj?.error?.message||'Instagram media creation failed'};
+
  const pBody=new URLSearchParams({access_token:token,creation_id:cj.id});
  const p=await fetch(`https://graph.facebook.com/v23.0/${ig}/media_publish`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:pBody});
  const pj=await p.json().catch(()=>({}));
