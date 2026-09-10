@@ -13,7 +13,7 @@ async function postFacebook(article:any,caption:string,link:string,connection:Me
  const pageId=connection.facebook_page_id||process.env.META_PAGE_ID;
  const token=connection.facebook_page_access_token||process.env.META_PAGE_ACCESS_TOKEN;
  if(!pageId||!token)return {ok:false,reason:'Facebook not connected'};
- const body=new URLSearchParams({access_token:token,message:`${caption}${link&& !caption.includes(link)?`\n\n${link}`:''}`});
+ const body=new URLSearchParams({access_token:token,message:`${caption}${link&&!caption.includes(link)?`\n\n${link}`:''}`});
  if(link)body.set('link',link);
  const r=await fetch(`https://graph.facebook.com/v23.0/${pageId}/feed`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body});
  const j=await r.json().catch(()=>({}));
@@ -26,17 +26,12 @@ async function postInstagram(article:any,caption:string,link:string,connection:M
  if(!ig||!token)return {ok:false,reason:'Instagram not connected'};
  const source=String(article.featured_media_url||'');
  if(!/^https?:\/\//i.test(source)||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(source))return {ok:false,reason:'Instagram direct posting currently requires a public featured image on the article'};
-
- const finalCaption=`${caption}${link&& !caption.includes(link)?`\n\n${link}`:''}`;
- // Social Pack manual posting must use the same Instagram-safe 4:5 image as auto-posting.
- // Using the raw article image here was the reason manual Social Pack posts could crop badly
- // and could diverge from the automatic publishing path.
- const image=`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}&v=${Date.now()}`;
+ const image=`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}`;
+ const finalCaption=`${caption}${link&&!caption.includes(link)?`\n\n${link}`:''}`;
  const createBody=new URLSearchParams({access_token:token,image_url:image,caption:finalCaption});
  const c=await fetch(`https://graph.facebook.com/v23.0/${ig}/media`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:createBody});
  const cj=await c.json().catch(()=>({}));
  if(!c.ok||!cj.id)return {ok:false,reason:cj?.error?.message||'Instagram media creation failed'};
-
  const pBody=new URLSearchParams({access_token:token,creation_id:cj.id});
  const p=await fetch(`https://graph.facebook.com/v23.0/${ig}/media_publish`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:pBody});
  const pj=await p.json().catch(()=>({}));
@@ -54,7 +49,12 @@ export async function POST(request:Request){
  const articleId=String(input.article_id||'');
  const platform=String(input.platform||'').toLowerCase();
  const caption=String(input.caption||'').trim();
- if(!articleId||!caption||!['facebook','instagram'].includes(platform))return NextResponse.json({error:'article_id, caption and a supported platform are required'},{status:400});
+ const facebookCaption=String(input.facebook_caption||caption).trim();
+ const instagramCaption=String(input.instagram_caption||caption).trim();
+ if(!articleId||!['facebook','instagram','both'].includes(platform))return NextResponse.json({error:'article_id and a supported platform are required'},{status:400});
+ if(platform==='facebook'&&!facebookCaption)return NextResponse.json({error:'Facebook caption is required'},{status:400});
+ if(platform==='instagram'&&!instagramCaption)return NextResponse.json({error:'Instagram caption is required'},{status:400});
+ if(platform==='both'&&(!facebookCaption||!instagramCaption))return NextResponse.json({error:'Facebook and Instagram captions are required'},{status:400});
 
  const [{data:article},{data:metaSetting}]=await Promise.all([
   db.from('articles').select('*').eq('id',articleId).eq('status','published').maybeSingle(),
@@ -64,7 +64,19 @@ export async function POST(request:Request){
  let connection:MetaConnection={};
  try{if(metaSetting?.setting_value)connection=JSON.parse(metaSetting.setting_value)||{}}catch{}
  const link=`${SITE_URL}/articles/${encodeURIComponent(article.slug)}`;
- const result=platform==='facebook'?await postFacebook(article,caption,link,connection):await postInstagram(article,caption,link,connection);
+
+ if(platform==='both'){
+  const [facebook,instagram]=await Promise.all([
+   postFacebook(article,facebookCaption,link,connection),
+   postInstagram(article,instagramCaption,link,connection)
+  ]);
+  const result={facebook,instagram};
+  await db.from('site_settings').upsert({setting_key:`social_manual_${article.id}_both`,setting_value:JSON.stringify({article_id:article.id,headline:article.headline,platform:'both',created_at:new Date().toISOString(),result}),updated_at:new Date().toISOString()},{onConflict:'setting_key'});
+  const ok=facebook.ok&&instagram.ok;
+  return NextResponse.json({ok,platform:'both',result,...(!ok?{error:[!facebook.ok?`Facebook: ${facebook.reason}`:'',!instagram.ok?`Instagram: ${instagram.reason}`:''].filter(Boolean).join(' | ')}:{})},{status:ok?200:400});
+ }
+
+ const result=platform==='facebook'?await postFacebook(article,facebookCaption,link,connection):await postInstagram(article,instagramCaption,link,connection);
  await db.from('site_settings').upsert({setting_key:`social_manual_${article.id}_${platform}`,setting_value:JSON.stringify({article_id:article.id,headline:article.headline,platform,created_at:new Date().toISOString(),result}),updated_at:new Date().toISOString()},{onConflict:'setting_key'});
  if(!result.ok)return NextResponse.json({error:result.reason||'Publish failed',result},{status:400});
  return NextResponse.json({ok:true,platform,result});
