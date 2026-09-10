@@ -18,6 +18,17 @@ function wrapHeadline(text:string,max=28){
  return lines;
 }
 
+async function spotifyCover(value?:string|null){
+ const url=String(value||'').trim();
+ if(!/open\.spotify\.com\/(track|album|artist|playlist)\//i.test(url))return '';
+ try{
+  const response=await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`,{cache:'no-store'});
+  if(!response.ok)return '';
+  const data=await response.json();
+  return typeof data?.thumbnail_url==='string'?data.thumbnail_url:'';
+ }catch{return ''}
+}
+
 export async function GET(request:Request){
  const {searchParams}=new URL(request.url);
  const articleId=String(searchParams.get('article_id')||'');
@@ -25,9 +36,15 @@ export async function GET(request:Request){
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
  if(!url||!key)return NextResponse.json({error:'Server configuration missing'},{status:503});
  const db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
- const {data:article}=await db.from('articles').select('featured_media_url,status,headline,category').eq('id',articleId).eq('status','published').maybeSingle();
- const source=String(article?.featured_media_url||'');
- if(!article||!/^https?:\/\//i.test(source)||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(source))return NextResponse.json({error:'Published article image not found'},{status:404});
+ const [{data:article},{data:musicRow}]=await Promise.all([
+  db.from('articles').select('id,featured_media_url,status,headline,category').eq('id',articleId).eq('status','published').maybeSingle(),
+  db.from('site_settings').select('setting_value').eq('setting_key',`article_media_${articleId}`).maybeSingle()
+ ]);
+ if(!article)return NextResponse.json({error:'Published article image not found'},{status:404});
+ let music:any=null;try{music=musicRow?.setting_value?JSON.parse(musicRow.setting_value):null}catch{}
+ let source=String(article.featured_media_url||music?.cover_url||'').trim();
+ if(!source){source=await spotifyCover(music?.spotify||music?.media_url)}
+ if(!/^https?:\/\//i.test(source)||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(source))return NextResponse.json({error:'Published article image not found'},{status:404});
 
  const lines=wrapHeadline(String(article.headline||'INDIE CUT'));
  const category=String(article.category||'ENTERTAINMENT').toUpperCase();
