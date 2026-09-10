@@ -7,6 +7,7 @@ import FooterSettings from '../FooterSettings';
 import ContentAgentScheduler from '../ContentAgentScheduler';
 import SocialAgentSettings from '../SocialAgentSettings';
 import SocialAnalytics from '../SocialAnalytics';
+import WebsiteAnalytics from '../WebsiteAnalytics';
 import BreakingNewsRadar from '../BreakingNewsRadar';
 import IndependentMusicRadar from '../IndependentMusicRadar';
 
@@ -22,7 +23,7 @@ const sections:Record<string,{title:string;intro:string}>={
  'social-agent':{title:'Social Media Agent',intro:'Automatically turn published Indie Cut stories into platform-ready social posts.'},
  advertising:{title:'Advertising',intro:'Manage ad creative, placements, destination links and campaign schedules.'},
  authors:{title:'Authors & Editors',intro:'Manage editorial profiles, headshots, bios and bylines.'},
- analytics:{title:'Analytics',intro:'Review live Indie Cut Facebook and Instagram performance.'},
+ analytics:{title:'Analytics',intro:'Review Indie Cut website audience plus live Facebook and Instagram performance.'},
  'media-library':{title:'Media Library',intro:'Browse and add reusable image and video assets.'},
  subscribers:{title:'Email Subscribers',intro:'Manage the Indie Cut reader list.'},
  settings:{title:'Site Settings',intro:'Control publication-wide brand, navigation, footer and social settings.'}
@@ -32,6 +33,6 @@ export default async function AdminSectionPage({params}:{params:{section:string}
  const section=sections[params.section];if(!section)notFound();
  const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
  if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');
- const content=params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<SocialAnalytics/>:<SectionManager section={params.section}/>;
+ const content=params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:<SectionManager section={params.section}/>;
  return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{content}{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
 }
