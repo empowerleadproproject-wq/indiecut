@@ -32,8 +32,11 @@ async function postInstagram(article:any,caption:string,link:string,connection:M
  const ig=connection.instagram_user_id||process.env.INSTAGRAM_USER_ID;
  const token=connection.facebook_page_access_token||process.env.META_PAGE_ACCESS_TOKEN;
  if(!ig||!token)return {ok:false,reason:'Instagram not connected'};
- const image=String(article.featured_media_url||'');
- if(!/^https?:\/\//i.test(image)||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(image))return {ok:false,reason:'Instagram auto-post requires a public image on the article'};
+ const source=String(article.featured_media_url||'');
+ if(!/^https?:\/\//i.test(source)||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(source))return {ok:false,reason:'Instagram auto-post requires a public image on the article'};
+ // Always give Instagram a 4:5, 1080x1350 rendition. The source is contained inside
+ // the frame instead of cover-cropped, so faces, headlines and multi-person artwork stay visible.
+ const image=`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}`;
  const createBody=new URLSearchParams({access_token:token,image_url:image,caption:`${caption}${link?`\n\n${link}`:''}`});
  const c=await fetch(`https://graph.facebook.com/v23.0/${ig}/media`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:createBody});
  const cj=await c.json().catch(()=>({}));
