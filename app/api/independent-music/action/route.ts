@@ -10,6 +10,7 @@ function slug(v:string){return String(v||'').trim().toLowerCase().replace(/[^a-z
 function textFromResponse(json:any){if(typeof json?.output_text==='string')return json.output_text;const parts:string[]=[];for(const item of json?.output||[]){for(const c of item?.content||[]){if(typeof c?.text==='string')parts.push(c.text)}}return parts.join('\n').trim()}
 function parseJson(text:string){return JSON.parse(String(text||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim())}
 function validUrl(v:any){const s=String(v||'').trim();return /^https?:\/\//i.test(s)?s:''}
+function playableUrl(lead:any){return validUrl(lead.latest_release_url)||validUrl(lead.spotify)||validUrl(lead.youtube)||validUrl(lead.soundcloud)||validUrl(lead.bandcamp)||''}
 
 async function adminDb(){
  const auth=createClient();const {data:{user}}=await auth.auth.getUser();
@@ -34,7 +35,7 @@ export async function POST(request:Request){
  }
 
  if(action==='add_music'){
-  const mediaUrl=validUrl(lead.latest_release_url)||validUrl(lead.spotify)||validUrl(lead.youtube)||validUrl(lead.soundcloud)||validUrl(lead.bandcamp);
+  const mediaUrl=playableUrl(lead);
   if(!mediaUrl)return NextResponse.json({error:'No verified release or listening URL is available for this artist.'},{status:400});
   const title=String(lead.latest_release||`${name} — featured release`).trim();
   const {data:existing}=await db.from('media_items').select('id,title,artist_name').eq('media_type','music').ilike('artist_name',name).ilike('title',title).limit(1).maybeSingle();
@@ -54,11 +55,17 @@ export async function POST(request:Request){
   let story:any;try{story=parseJson(textFromResponse(j))}catch{return NextResponse.json({error:'Article writer returned invalid JSON'},{status:502})}
   if(String(story.verification_status||'').toLowerCase()!=='verified')return NextResponse.json({error:story.verification_note||'The article could not be sufficiently verified.'},{status:400});
   const headline=String(story.headline||'').trim();if(!headline)return NextResponse.json({error:'Article writer returned no headline'},{status:502});
-  const articleSlug=slug(headline);const {data:dupe}=await db.from('articles').select('id,headline').eq('slug',articleSlug).maybeSingle();if(dupe)return NextResponse.json({ok:true,existing:true,row:dupe,message:'A matching article draft already exists.'});
+  const articleSlug=slug(headline);
+  const articleMedia=playableUrl(lead)||validUrl(lead.image_url)||null;
+  const {data:dupe}=await db.from('articles').select('id,headline,featured_media_url').eq('slug',articleSlug).maybeSingle();
+  if(dupe){
+   if(articleMedia&&dupe.featured_media_url!==articleMedia){await db.from('articles').update({featured_media_url:articleMedia,updated_at:new Date().toISOString()}).eq('id',dupe.id)}
+   return NextResponse.json({ok:true,existing:true,row:{...dupe,featured_media_url:articleMedia||dupe.featured_media_url},message:'Matching article already exists. The music/video has now been attached to it.'});
+  }
   const verifiedSources=Array.isArray(story.sources)?story.sources.map((x:any)=>validUrl(x)).filter(Boolean):sources;
-  const payload={headline,slug:articleSlug,subheadline:String(story.subheadline||'').trim()||null,category:'music',subject_name:String(story.subject_name||name).trim(),body:String(story.body||'').trim(),featured_media_url:validUrl(lead.image_url)||null,sources:verifiedSources,verification_status:'verified',status:'draft',published_at:null};
+  const payload={headline,slug:articleSlug,subheadline:String(story.subheadline||'').trim()||null,category:'music',subject_name:String(story.subject_name||name).trim(),body:String(story.body||'').trim(),featured_media_url:articleMedia,sources:verifiedSources,verification_status:'verified',status:'draft',published_at:null};
   const {data,error}=await db.from('articles').insert(payload).select().single();if(error)return NextResponse.json({error:error.message},{status:400});
-  return NextResponse.json({ok:true,row:data,message:`Music article draft created for ${name}. Review it in Articles before publishing.`});
+  return NextResponse.json({ok:true,row:data,message:`Music article draft created for ${name} with playable music/video attached. Review it in Articles before publishing.`});
  }
 
  return NextResponse.json({error:'Unsupported action'},{status:400});
