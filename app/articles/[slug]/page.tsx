@@ -67,14 +67,14 @@ export default async function ArticlePage({params}:{params:{slug:string}}){
    {railAds.length>0&&<aside className="ic-article-ad-rail" aria-label="Advertisements">{railAds.map((ad:any,i:number)=><div className="ic-article-ad-slot" key={ad._id||ad.id||`${ad.creative_url}-${i}`}><span>ADVERTISEMENT</span>{ad.destination_url?<a href={ad.destination_url} target="_blank" rel="noreferrer sponsored">{video(ad.creative_url)?<video src={ad.creative_url} autoPlay muted loop playsInline/>:<img src={ad.creative_url} alt={ad.advertiser||'Advertisement'}/>}</a>:(video(ad.creative_url)?<video src={ad.creative_url} autoPlay muted loop playsInline/>:<img src={ad.creative_url} alt={ad.advertiser||'Advertisement'}/>)}</div>)}</aside>}
   </div>
   <style>{`
-   .ic-article-page-grid{width:min(1180px,calc(100% - 40px));margin:0 auto;display:grid;grid-template-columns:minmax(0,850px) 260px;gap:36px;align-items:start}
+   .ic-article-page-grid{width:min(1220px,calc(100% - 40px));margin:0 auto;display:grid;grid-template-columns:minmax(0,850px) 290px;gap:36px;align-items:start}
    .ic-article-page-grid .article{width:auto;max-width:none;margin:0;padding-left:0;padding-right:0}
    .ic-article-ad-rail{padding-top:50px;display:flex;flex-direction:column;gap:20px}
    .ic-article-ad-slot{width:100%;border:1px solid #ddd;background:#fff;padding:8px}
    .ic-article-ad-slot>span{display:block;font-size:9px;line-height:1;letter-spacing:1.2px;color:#888;margin-bottom:7px;font-weight:700}
    .ic-article-ad-slot a{display:block}
-   .ic-article-ad-slot img,.ic-article-ad-slot video{display:block;width:100%;height:auto;max-height:360px;object-fit:contain;margin:0;background:#f7f7f7}
-   @media(max-width:1050px){.ic-article-page-grid{display:block;width:min(850px,calc(100% - 32px))}.ic-article-ad-rail{display:none}.ic-article-page-grid .article{padding-left:0;padding-right:0}}
+   .ic-article-ad-slot img,.ic-article-ad-slot video{display:block;width:100%;height:auto;max-height:390px;object-fit:contain;margin:0;background:#f7f7f7}
+   @media(max-width:1100px){.ic-article-page-grid{display:block;width:min(850px,calc(100% - 32px))}.ic-article-ad-rail{display:none}.ic-article-page-grid .article{padding-left:0;padding-right:0}}
   `}</style>
   <PublicFooter/>
  </main>
