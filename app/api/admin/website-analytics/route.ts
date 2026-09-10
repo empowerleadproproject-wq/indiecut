@@ -36,20 +36,29 @@ export async function GET(){
  const today=within(1),week=within(7),month=rows;
  const uniq=(arr:any[],key:string)=>new Set(arr.map(x=>x[key]).filter(Boolean)).size;
  const countBy=(arr:any[],getter:(x:any)=>string)=>{
-  const m=new Map<string,number>();for(const x of arr){const k=getter(x)||'Unknown';m.set(k,(m.get(k)||0)+1)}
-  return [...m.entries()].sort((a,b)=>b[1]-a[1]).map(([label,count])=>({label,count}));
+  const m=new Map<string,number>();
+  for(const x of arr){const k=getter(x)||'Unknown';m.set(k,(m.get(k)||0)+1)}
+  return Array.from(m.entries()).sort((a,b)=>b[1]-a[1]).map(([label,count])=>({label,count}));
  };
  const topPages=countBy(month,r=>String(r.path||'/').split('?')[0]).slice(0,15);
  const sources=countBy(month,r=>source(r.referrer)).filter(x=>x.label!=='Internal').slice(0,12);
  const sessions=new Map<string,any[]>();
- for(const r of [...month].reverse()){if(!sessions.has(r.session_id))sessions.set(r.session_id,[]);sessions.get(r.session_id)!.push(r)}
- const entries=countBy([...sessions.values()],s=>String(s[0]?.path||'/').split('?')[0]).slice(0,10);
- const transitions=new Map<string,number>();
- for(const s of sessions.values())for(let i=1;i<s.length;i++){
-  const a=String(s[i-1].path||'/').split('?')[0],b=String(s[i].path||'/').split('?')[0];if(a===b)continue;
-  const key=`${a} → ${b}`;transitions.set(key,(transitions.get(key)||0)+1);
+ for(const r of Array.from(month).reverse()){
+  if(!sessions.has(r.session_id))sessions.set(r.session_id,[]);
+  sessions.get(r.session_id)!.push(r)
  }
- const paths=[...transitions.entries()].sort((a,b)=>b[1]-a[1]).slice(0,15).map(([label,count])=>({label,count}));
+ const sessionValues=Array.from(sessions.values());
+ const entries=countBy(sessionValues,s=>String(s[0]?.path||'/').split('?')[0]).slice(0,10);
+ const transitions=new Map<string,number>();
+ for(const s of sessionValues){
+  for(let i=1;i<s.length;i++){
+   const a=String(s[i-1].path||'/').split('?')[0],b=String(s[i].path||'/').split('?')[0];
+   if(a===b)continue;
+   const key=`${a} → ${b}`;
+   transitions.set(key,(transitions.get(key)||0)+1);
+  }
+ }
+ const paths=Array.from(transitions.entries()).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([label,count])=>({label,count}));
  const recent=month.slice(0,30).map((r:any)=>({path:r.path,page_title:r.page_title,source:source(r.referrer),created_at:r.created_at,article_slug:r.article_slug}));
  return NextResponse.json({
   generated_at:new Date().toISOString(),
