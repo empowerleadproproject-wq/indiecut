@@ -10,7 +10,7 @@ function slug(v:string){return String(v||'').trim().toLowerCase().replace(/[^a-z
 function textFromResponse(json:any){if(typeof json?.output_text==='string')return json.output_text;const parts:string[]=[];for(const item of json?.output||[]){for(const c of item?.content||[]){if(typeof c?.text==='string')parts.push(c.text)}}return parts.join('\n').trim()}
 function parseJson(text:string){return JSON.parse(String(text||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim())}
 function validUrl(v:any){const s=String(v||'').trim();return /^https?:\/\//i.test(s)?s:''}
-function playableUrl(lead:any){return validUrl(lead.latest_release_url)||validUrl(lead.spotify)||validUrl(lead.youtube)||validUrl(lead.soundcloud)||validUrl(lead.bandcamp)||''}
+function playableUrl(lead:any){return validUrl(lead.spotify)||validUrl(lead.youtube)||validUrl(lead.soundcloud)||validUrl(lead.bandcamp)||validUrl(lead.latest_release_url)||''}
 
 async function adminDb(){
  const auth=createClient();const {data:{user}}=await auth.auth.getUser();
