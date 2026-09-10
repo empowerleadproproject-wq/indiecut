@@ -2,7 +2,6 @@ import type {Metadata} from 'next';
 import {notFound} from 'next/navigation';
 import PublicHeader from '../../PublicHeader';
 import PublicFooter from '../../PublicFooter';
-import SitewideAd from '../../SitewideAd';
 import ShareButtons from './ShareButtons';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
 
@@ -13,6 +12,7 @@ function spotifyEmbed(url?:string|null){const s=String(url||'');const m=s.match(
 function youtubeEmbed(url?:string|null){const s=String(url||'');let id='';try{const u=new URL(s);if(u.hostname.includes('youtu.be'))id=u.pathname.replace(/^\//,'').split('/')[0];else if(u.hostname.includes('youtube.com'))id=u.searchParams.get('v')||u.pathname.match(/\/shorts\/([^/?]+)/)?.[1]||u.pathname.match(/\/embed\/([^/?]+)/)?.[1]||''}catch{}return id?`https://www.youtube.com/embed/${id}`:''}
 function soundcloudEmbed(url?:string|null){const s=String(url||'');return /soundcloud\.com\//i.test(s)?`https://w.soundcloud.com/player/?url=${encodeURIComponent(s)}&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=false`:''}
 function isPlayableEmbed(url?:string|null){return Boolean(video(url)||audio(url)||spotifyEmbed(url)||youtubeEmbed(url)||soundcloudEmbed(url))}
+function shuffled<T>(items:T[]){const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
 async function spotifyCover(url?:string|null){
  if(!spotifyEmbed(url))return '';
  try{
@@ -52,9 +52,30 @@ export default async function ArticlePage({params}:{params:{slug:string}}){
  ]);
  let ads:any[]=[];try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}
  let music:any=null;try{music=musicRow?.setting_value?JSON.parse(musicRow.setting_value):null}catch{}
- const now=new Date().toISOString().slice(0,10);const ad=ads.find(a=>a.active!==false&&a.placement==='article-inline'&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now));const paragraphs=String(data.body||'').split(/\n\n+/).filter(Boolean);
- return <main><PublicHeader/><div className="ic-article-layout"><article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIE CUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{data.author_name||'Indie Cut Editorial'}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
- {data.featured_media_url&&<FeaturedMedia url={data.featured_media_url} headline={data.headline}/>} 
- {music?.media_url&&music.media_url!==data.featured_media_url&&<section style={{margin:'24px 0'}}><div className="kicker">LISTEN / WATCH</div>{music.title&&<h3>{music.title}</h3>}<FeaturedMedia url={music.media_url} headline={music.title||data.headline}/></section>}
- {paragraphs.map((p:string,i:number)=><div key={i}>{i===2&&ad?<section className="ic-public-ad inline"><span>ADVERTISEMENT</span><a href={ad.destination_url||'#'}>{ad.creative_url&&(video(ad.creative_url)?<video src={ad.creative_url} autoPlay muted loop playsInline/>:<img src={ad.creative_url} alt={ad.advertiser||'Advertisement'}/>)}</a></section>:null}<p>{p}</p></div>)}{Array.isArray(data.sources)&&data.sources.length>0&&<section><div className="kicker">VERIFIED SOURCES</div><ul>{data.sources.map((s:string,i:number)=><li key={i}><a href={s} target="_blank" rel="noreferrer">{s}</a></li>)}</ul></section>}</article><SitewideAd/></div><PublicFooter/></main>
+ const now=new Date().toISOString().slice(0,10);
+ const liveAds=ads.filter(a=>a?.creative_url&&a.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now));
+ const railAds=shuffled(liveAds).slice(0,4);
+ const paragraphs=String(data.body||'').split(/\n\n+/).filter(Boolean);
+ return <main><PublicHeader/>
+  <div className="ic-article-page-grid">
+   <article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIE CUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{data.author_name||'Indie Cut Editorial'}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
+    {data.featured_media_url&&<FeaturedMedia url={data.featured_media_url} headline={data.headline}/>} 
+    {music?.media_url&&music.media_url!==data.featured_media_url&&<section style={{margin:'24px 0'}}><div className="kicker">LISTEN / WATCH</div>{music.title&&<h3>{music.title}</h3>}<FeaturedMedia url={music.media_url} headline={music.title||data.headline}/></section>}
+    {paragraphs.map((p:string,i:number)=><p key={i}>{p}</p>)}
+    {Array.isArray(data.sources)&&data.sources.length>0&&<section><div className="kicker">VERIFIED SOURCES</div><ul>{data.sources.map((s:string,i:number)=><li key={i}><a href={s} target="_blank" rel="noreferrer">{s}</a></li>)}</ul></section>}
+   </article>
+   {railAds.length>0&&<aside className="ic-article-ad-rail" aria-label="Advertisements">{railAds.map((ad:any,i:number)=><div className="ic-article-ad-slot" key={ad._id||ad.id||`${ad.creative_url}-${i}`}><span>ADVERTISEMENT</span>{ad.destination_url?<a href={ad.destination_url} target="_blank" rel="noreferrer sponsored">{video(ad.creative_url)?<video src={ad.creative_url} autoPlay muted loop playsInline/>:<img src={ad.creative_url} alt={ad.advertiser||'Advertisement'}/>}</a>:(video(ad.creative_url)?<video src={ad.creative_url} autoPlay muted loop playsInline/>:<img src={ad.creative_url} alt={ad.advertiser||'Advertisement'}/>)}</div>)}</aside>}
+  </div>
+  <style>{`
+   .ic-article-page-grid{width:min(1180px,calc(100% - 40px));margin:0 auto;display:grid;grid-template-columns:minmax(0,850px) 260px;gap:36px;align-items:start}
+   .ic-article-page-grid .article{width:auto;max-width:none;margin:0;padding-left:0;padding-right:0}
+   .ic-article-ad-rail{padding-top:50px;display:flex;flex-direction:column;gap:20px}
+   .ic-article-ad-slot{width:100%;border:1px solid #ddd;background:#fff;padding:8px}
+   .ic-article-ad-slot>span{display:block;font-size:9px;line-height:1;letter-spacing:1.2px;color:#888;margin-bottom:7px;font-weight:700}
+   .ic-article-ad-slot a{display:block}
+   .ic-article-ad-slot img,.ic-article-ad-slot video{display:block;width:100%;height:auto;max-height:360px;object-fit:contain;margin:0;background:#f7f7f7}
+   @media(max-width:1050px){.ic-article-page-grid{display:block;width:min(850px,calc(100% - 32px))}.ic-article-ad-rail{display:none}.ic-article-page-grid .article{padding-left:0;padding-right:0}}
+  `}</style>
+  <PublicFooter/>
+ </main>
 }
