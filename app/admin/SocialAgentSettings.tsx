@@ -57,6 +57,17 @@ export default function SocialAgentSettings(){
   }catch(e:any){setMessage(e.message)}finally{setPosting('')}
  }
 
+ async function postBoth(){
+  if(!packResult)return;
+  setPosting('both');setMessage('Publishing to Facebook and Instagram…');
+  try{
+   const r=await fetch('/api/social-agent/manual-publish',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({article_id:packResult.article_id,platform:'both',facebook_caption:packResult.pack.facebook.post,instagram_caption:packResult.pack.instagram.caption})});
+   const j=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(j.error||'Publish failed');
+   setMessage('Published to Facebook and Instagram successfully.');
+  }catch(e:any){setMessage(e.message)}finally{setPosting('')}
+ }
+
  const cardStyle={border:'1px solid #ddd',padding:16,borderRadius:8,display:'grid',gap:10} as const;
  const textareaStyle={width:'100%',minHeight:120} as const;
 
@@ -90,12 +101,13 @@ export default function SocialAgentSettings(){
 
    {packResult&&<div className="ic-agent-results" style={{display:'grid',gap:14}}>
     <div><span className="ic-status-pill">READY TO DISTRIBUTE</span><h3 style={{marginBottom:4}}>{packResult.headline}</h3><small>{packResult.article_url}</small></div>
+    {status?.facebook&&status?.instagram&&<button type="button" onClick={postBoth} disabled={posting==='both'}>{posting==='both'?'POSTING TO FACEBOOK + INSTAGRAM…':'POST TO FACEBOOK + INSTAGRAM'}</button>}
 
-    <article style={cardStyle}><h3>Instagram</h3><label>Hook<input value={packResult.pack.instagram.hook} onChange={e=>edit('instagram','hook',e.target.value)}/></label><label>Caption<textarea style={textareaStyle} value={packResult.pack.instagram.caption} onChange={e=>edit('instagram','caption',e.target.value)}/></label><div className="ic-actions"><button onClick={()=>copy(packResult.pack.instagram.caption,'Instagram caption')}>COPY INSTAGRAM</button>{status?.instagram&&<button disabled={posting==='instagram'} onClick={()=>directPost('instagram')}>{posting==='instagram'?'POSTING…':'POST TO INSTAGRAM'}</button>}</div><small>Direct Instagram publishing uses the article’s featured image. Video/Reel publishing can be added after the TikTok/Reels media workflow is connected.</small></article>
+    <article style={cardStyle}><h3>Instagram</h3><label>Hook<input value={packResult.pack.instagram.hook} onChange={e=>edit('instagram','hook',e.target.value)}/></label><label>Caption<textarea style={textareaStyle} value={packResult.pack.instagram.caption} onChange={e=>edit('instagram','caption',e.target.value)}/></label><div className="ic-actions"><button onClick={()=>copy(packResult.pack.instagram.caption,'Instagram caption')}>COPY INSTAGRAM</button>{status?.instagram&&<button disabled={posting==='instagram'||posting==='both'} onClick={()=>directPost('instagram')}>{posting==='instagram'?'POSTING…':'POST TO INSTAGRAM'}</button>}</div><small>Direct Instagram publishing uses an Instagram-safe 4:5 version of the article image so wide artwork is not cropped.</small></article>
 
     <article style={cardStyle}><h3>X</h3><label>Post<textarea style={textareaStyle} value={packResult.pack.x.post} onChange={e=>edit('x','post',e.target.value)}/></label><small>{packResult.pack.x.post.length}/280 characters</small><div className="ic-actions"><button onClick={()=>copy(packResult.pack.x.post,'X post')}>COPY X</button><button onClick={openX}>OPEN X COMPOSER ↗</button></div></article>
 
-    <article style={cardStyle}><h3>Facebook</h3><label>Hook<input value={packResult.pack.facebook.hook} onChange={e=>edit('facebook','hook',e.target.value)}/></label><label>Post<textarea style={textareaStyle} value={packResult.pack.facebook.post} onChange={e=>edit('facebook','post',e.target.value)}/></label><div className="ic-actions"><button onClick={()=>copy(packResult.pack.facebook.post,'Facebook post')}>COPY FACEBOOK</button>{status?.facebook&&<button disabled={posting==='facebook'} onClick={()=>directPost('facebook')}>{posting==='facebook'?'POSTING…':'POST TO FACEBOOK'}</button>}</div></article>
+    <article style={cardStyle}><h3>Facebook</h3><label>Hook<input value={packResult.pack.facebook.hook} onChange={e=>edit('facebook','hook',e.target.value)}/></label><label>Post<textarea style={textareaStyle} value={packResult.pack.facebook.post} onChange={e=>edit('facebook','post',e.target.value)}/></label><div className="ic-actions"><button onClick={()=>copy(packResult.pack.facebook.post,'Facebook post')}>COPY FACEBOOK</button>{status?.facebook&&<button disabled={posting==='facebook'||posting==='both'} onClick={()=>directPost('facebook')}>{posting==='facebook'?'POSTING…':'POST TO FACEBOOK'}</button>}</div></article>
 
     <article style={cardStyle}><h3>Threads</h3><label>Post<textarea style={textareaStyle} value={packResult.pack.threads.post} onChange={e=>edit('threads','post',e.target.value)}/></label><div className="ic-actions"><button onClick={()=>copy(packResult.pack.threads.post,'Threads post')}>COPY THREADS</button></div></article>
 
