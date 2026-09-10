@@ -3,7 +3,6 @@ import './mobile.css';
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import WebsiteAnalyticsTracker from './WebsiteAnalyticsTracker';
-import SitewideAd from './SitewideAd';
 
 export const metadata: Metadata = {
   title: 'Indie Cut',
@@ -11,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({children}:{children:React.ReactNode}){
-  return <html lang="en"><body><Suspense fallback={null}><WebsiteAnalyticsTracker/><SitewideAd/></Suspense>{children}</body></html>;
+  return <html lang="en"><body><Suspense fallback={null}><WebsiteAnalyticsTracker/></Suspense>{children}</body></html>;
 }
