@@ -6,7 +6,21 @@ import {isAdminEmail} from '../../../../lib/admin';
 export const dynamic='force-dynamic';
 export const maxDuration=120;
 const SITE_URL=(process.env.NEXT_PUBLIC_SITE_URL||'https://indiecut.vercel.app').replace(/\/$/,'');
+const GRAPH='https://graph.facebook.com/v23.0';
 function textFromResponse(json:any){if(typeof json?.output_text==='string')return json.output_text;const parts:string[]=[];for(const item of json?.output||[]){for(const c of item?.content||[]){if(typeof c?.text==='string')parts.push(c.text)}}return parts.join('\n').trim()}
+const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+
+async function waitForInstagramContainer(id:string,token:string){
+ for(let i=0;i<12;i++){
+  const r=await fetch(`${GRAPH}/${encodeURIComponent(id)}?fields=status_code,status&access_token=${encodeURIComponent(token)}`,{cache:'no-store'});
+  const j=await r.json().catch(()=>({}));
+  const code=String(j?.status_code||'').toUpperCase();
+  if(code==='FINISHED')return {ok:true};
+  if(code==='ERROR'||code==='EXPIRED')return {ok:false,reason:j?.status||`Instagram media container ${code.toLowerCase()}`};
+  await sleep(1500);
+ }
+ return {ok:false,reason:'Instagram media was still processing. Please try again.'};
+}
 
 async function makeCaption(article:any,settings:any){
  const fallback=`${article.headline}\n\n${article.subheadline||''}`.trim();
@@ -22,8 +36,8 @@ async function postFacebook(article:any,caption:string,link:string,connection:Me
  const token=connection.facebook_page_access_token||process.env.META_PAGE_ACCESS_TOKEN;
  if(!pageId||!token)return {ok:false,reason:'Facebook not connected'};
  const body=new URLSearchParams({access_token:token,message:`${caption}${link?`\n\n${link}`:''}`});
- if(article.featured_media_url&&/^https?:\/\//i.test(article.featured_media_url))body.set('link',link||article.featured_media_url);else if(link)body.set('link',link);
- const r=await fetch(`https://graph.facebook.com/v23.0/${pageId}/feed`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body});
+ if(link)body.set('link',link);
+ const r=await fetch(`${GRAPH}/${pageId}/feed`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body});
  const j=await r.json().catch(()=>({}));
  return r.ok?{ok:true,id:j.id}:{ok:false,reason:j?.error?.message||'Facebook post failed'};
 }
@@ -34,17 +48,17 @@ async function postInstagram(article:any,caption:string,link:string,connection:M
  if(!ig||!token)return {ok:false,reason:'Instagram not connected'};
  const source=String(article.featured_media_url||'');
  if(!/^https?:\/\//i.test(source)||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(source))return {ok:false,reason:'Instagram auto-post requires a public image on the article'};
- // Always give Instagram a 4:5, 1080x1350 rendition. The source is contained inside
- // the frame instead of cover-cropped, so faces, headlines and multi-person artwork stay visible.
- const image=`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}`;
+ const image=`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}&v=${Date.now()}`;
  const createBody=new URLSearchParams({access_token:token,image_url:image,caption:`${caption}${link?`\n\n${link}`:''}`});
- const c=await fetch(`https://graph.facebook.com/v23.0/${ig}/media`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:createBody});
+ const c=await fetch(`${GRAPH}/${ig}/media`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:createBody});
  const cj=await c.json().catch(()=>({}));
  if(!c.ok||!cj.id)return {ok:false,reason:cj?.error?.message||'Instagram media creation failed'};
- const pBody=new URLSearchParams({access_token:token,creation_id:cj.id});
- const p=await fetch(`https://graph.facebook.com/v23.0/${ig}/media_publish`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:pBody});
+ const ready=await waitForInstagramContainer(String(cj.id),token);
+ if(!ready.ok)return {ok:false,reason:ready.reason};
+ const pBody=new URLSearchParams({access_token:token,creation_id:String(cj.id)});
+ const p=await fetch(`${GRAPH}/${ig}/media_publish`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:pBody});
  const pj=await p.json().catch(()=>({}));
- return p.ok?{ok:true,id:pj.id}:{ok:false,reason:pj?.error?.message||'Instagram publish failed'};
+ return p.ok&&pj?.id?{ok:true,id:pj.id}:{ok:false,reason:pj?.error?.message||'Instagram publish failed'};
 }
 
 export async function POST(request:Request){
