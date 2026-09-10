@@ -11,22 +11,24 @@ export default function SitewideAd(){
   const pathname=usePathname();
   const [ads,setAds]=useState<Ad[]>([]);
 
+  const isArticlePage=Boolean(pathname?.startsWith('/articles/'));
+
   useEffect(()=>{
-    if(pathname?.startsWith('/admin')||pathname==='/')return;
+    if(pathname?.startsWith('/admin')||!isArticlePage)return;
     let cancelled=false;
     fetch('/api/public/ads',{cache:'no-store'})
       .then(r=>r.json())
       .then(j=>{if(!cancelled)setAds(Array.isArray(j?.ads)?j.ads:[])})
       .catch(()=>{});
     return()=>{cancelled=true};
-  },[pathname]);
+  },[pathname,isArticlePage]);
 
   const visibleAds=useMemo(()=>{
     const eligible=ads.filter(ad=>Boolean(ad?.creative_url));
     return shuffled(eligible).slice(0,4);
   },[ads,pathname]);
 
-  if(pathname?.startsWith('/admin')||pathname==='/'||!visibleAds.length)return null;
+  if(pathname?.startsWith('/admin')||!isArticlePage||!visibleAds.length)return null;
 
   return <>
     <aside className="ic-sitewide-ad-rail" aria-label="Advertisements">
@@ -43,13 +45,13 @@ export default function SitewideAd(){
       })}
     </aside>
     <style jsx global>{`
-      .ic-sitewide-ad-rail{position:absolute;left:calc(50% + 445px);top:190px;width:260px;z-index:2;display:flex;flex-direction:column;gap:20px}
+      .ic-sitewide-ad-rail{position:absolute;left:calc(50% + 455px);top:190px;width:250px;z-index:2;display:flex;flex-direction:column;gap:20px}
       .ic-sitewide-ad-slot{width:100%;background:#fff;border:1px solid #ddd;padding:8px;text-align:center}
       .ic-sitewide-ad-slot>span{display:block;font-size:9px;line-height:1;letter-spacing:1.2px;color:#888;margin:0 0 7px;font-weight:700;text-align:left}
       .ic-sitewide-ad-slot a{display:block;width:100%}
       .ic-sitewide-ad-slot img,.ic-sitewide-ad-slot video{display:block;width:100%;height:auto;max-height:360px;object-fit:contain;margin:0;background:#f7f7f7}
       @media(max-width:1320px){.ic-sitewide-ad-rail{left:auto;right:18px;width:220px}}
-      @media(max-width:1050px){.ic-sitewide-ad-rail{position:relative;left:auto;right:auto;top:auto;width:300px;max-width:calc(100vw - 32px);margin:22px auto 30px;z-index:1}.ic-sitewide-ad-slot img,.ic-sitewide-ad-slot video{max-height:420px}}
+      @media(max-width:1050px){.ic-sitewide-ad-rail{display:none}}
     `}</style>
   </>;
 }
