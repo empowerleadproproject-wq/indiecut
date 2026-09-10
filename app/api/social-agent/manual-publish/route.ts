@@ -10,15 +10,16 @@ const GRAPH='https://graph.facebook.com/v23.0';
 
 type MetaConnection={facebook_page_id?:string;facebook_page_name?:string;facebook_page_access_token?:string;instagram_user_id?:string;instagram_username?:string};
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+const isVideoUrl=(url:string)=>/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 
 async function waitForInstagramContainer(id:string,token:string){
- for(let i=0;i<12;i++){
+ for(let i=0;i<40;i++){
   const r=await fetch(`${GRAPH}/${encodeURIComponent(id)}?fields=status_code,status&access_token=${encodeURIComponent(token)}`,{cache:'no-store'});
   const j=await r.json().catch(()=>({}));
   const code=String(j?.status_code||'').toUpperCase();
   if(code==='FINISHED')return {ok:true};
   if(code==='ERROR'||code==='EXPIRED')return {ok:false,reason:j?.status||`Instagram media container ${code.toLowerCase()}`};
-  await sleep(1500);
+  await sleep(2000);
  }
  return {ok:false,reason:'Instagram media was still processing. Please try the post again.'};
 }
@@ -38,20 +39,22 @@ async function postInstagram(article:any,caption:string,link:string,connection:M
  const ig=connection.instagram_user_id||process.env.INSTAGRAM_USER_ID;
  const token=connection.facebook_page_access_token||process.env.META_PAGE_ACCESS_TOKEN;
  if(!ig||!token)return {ok:false,reason:'Instagram not connected'};
- const source=String(article.featured_media_url||'');
- if(!/^https?:\/\//i.test(source)||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(source))return {ok:false,reason:'Instagram direct posting currently requires a public featured image on the article'};
- const image=`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}&v=${Date.now()}`;
+ const source=String(article.featured_media_url||'').trim();
+ if(!/^https?:\/\//i.test(source))return {ok:false,reason:'Instagram direct posting requires public featured media on the article'};
  const finalCaption=`${caption}${link&&!caption.includes(link)?`\n\n${link}`:''}`;
- const createBody=new URLSearchParams({access_token:token,image_url:image,caption:finalCaption});
+ const video=isVideoUrl(source);
+ const createBody=video
+  ? new URLSearchParams({access_token:token,media_type:'REELS',video_url:source,caption:finalCaption,share_to_feed:'true'})
+  : new URLSearchParams({access_token:token,image_url:`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}&v=${Date.now()}`,caption:finalCaption});
  const c=await fetch(`${GRAPH}/${ig}/media`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:createBody});
  const cj=await c.json().catch(()=>({}));
- if(!c.ok||!cj.id)return {ok:false,reason:cj?.error?.message||'Instagram media creation failed'};
+ if(!c.ok||!cj.id)return {ok:false,reason:cj?.error?.message||`Instagram ${video?'Reel':'media'} creation failed`};
  const ready=await waitForInstagramContainer(String(cj.id),token);
  if(!ready.ok)return {ok:false,reason:ready.reason};
  const pBody=new URLSearchParams({access_token:token,creation_id:String(cj.id)});
  const p=await fetch(`${GRAPH}/${ig}/media_publish`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:pBody});
  const pj=await p.json().catch(()=>({}));
- return p.ok&&pj?.id?{ok:true,id:pj.id}:{ok:false,reason:pj?.error?.message||'Instagram publish failed'};
+ return p.ok&&pj?.id?{ok:true,id:pj.id,type:video?'reel':'image'}:{ok:false,reason:pj?.error?.message||`Instagram ${video?'Reel':'post'} publish failed`};
 }
 
 export async function POST(request:Request){
