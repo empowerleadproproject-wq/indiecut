@@ -48,12 +48,12 @@ export default function SitewideAd(){
         : creative}
     </aside>
     <style jsx global>{`
-      .ic-sitewide-ad{position:fixed;right:18px;top:155px;width:270px;z-index:8;background:#fff;border:1px solid #ddd;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);text-align:center}
-      .ic-sitewide-ad>span{display:block;font-size:9px;letter-spacing:1.4px;color:#888;margin-bottom:7px;font-weight:700}
-      .ic-sitewide-ad a{display:block}
-      .ic-sitewide-ad img,.ic-sitewide-ad video{display:block;width:100%;height:auto;max-height:420px;object-fit:contain;background:#f7f7f7}
-      @media(max-width:1350px){.ic-sitewide-ad{width:220px;right:10px}}
-      @media(max-width:1100px){.ic-sitewide-ad{position:relative;right:auto;top:auto;width:min(92%,680px);margin:18px auto 26px;z-index:1;box-shadow:none}.ic-sitewide-ad img,.ic-sitewide-ad video{max-height:360px}}
+      .ic-sitewide-ad{position:fixed!important;right:24px!important;top:150px!important;width:260px!important;max-width:260px!important;z-index:8;background:#fff;border:1px solid #ddd;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.10);text-align:center;overflow:hidden}
+      .ic-sitewide-ad>span{display:block;font-size:9px;line-height:1;letter-spacing:1.2px;color:#888;margin:0 0 7px;font-weight:700;text-align:left}
+      .ic-sitewide-ad a{display:block;width:100%}
+      .ic-sitewide-ad img,.ic-sitewide-ad video{display:block!important;width:100%!important;max-width:244px!important;height:auto!important;max-height:430px!important;object-fit:contain!important;margin:0!important;background:#f7f7f7}
+      @media(max-width:1180px){.ic-sitewide-ad{right:12px!important;width:220px!important;max-width:220px!important}.ic-sitewide-ad img,.ic-sitewide-ad video{max-width:204px!important}}
+      @media(max-width:900px){.ic-sitewide-ad{position:relative!important;right:auto!important;top:auto!important;width:300px!important;max-width:calc(100vw - 32px)!important;margin:18px auto 26px!important;box-shadow:none;z-index:1}.ic-sitewide-ad img,.ic-sitewide-ad video{max-width:100%!important;max-height:420px!important}}
     `}</style>
   </>;
 }
