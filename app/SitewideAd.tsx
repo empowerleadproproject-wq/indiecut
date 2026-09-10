@@ -43,13 +43,13 @@ export default function SitewideAd(){
       })}
     </aside>
     <style jsx global>{`
-      .ic-sitewide-ad-rail{position:fixed;right:24px;top:150px;width:260px;max-height:calc(100vh - 175px);overflow-y:auto;z-index:8;display:flex;flex-direction:column;gap:18px;padding-right:2px}
-      .ic-sitewide-ad-slot{width:100%;background:#fff;border:1px solid #ddd;padding:8px;box-shadow:0 6px 20px rgba(0,0,0,.08);text-align:center}
+      .ic-sitewide-ad-rail{position:absolute;left:calc(50% + 445px);top:190px;width:260px;z-index:2;display:flex;flex-direction:column;gap:20px}
+      .ic-sitewide-ad-slot{width:100%;background:#fff;border:1px solid #ddd;padding:8px;text-align:center}
       .ic-sitewide-ad-slot>span{display:block;font-size:9px;line-height:1;letter-spacing:1.2px;color:#888;margin:0 0 7px;font-weight:700;text-align:left}
       .ic-sitewide-ad-slot a{display:block;width:100%}
       .ic-sitewide-ad-slot img,.ic-sitewide-ad-slot video{display:block;width:100%;height:auto;max-height:360px;object-fit:contain;margin:0;background:#f7f7f7}
-      @media(max-width:1180px){.ic-sitewide-ad-rail{right:12px;width:220px}}
-      @media(max-width:900px){.ic-sitewide-ad-rail{position:relative;right:auto;top:auto;width:300px;max-width:calc(100vw - 32px);max-height:none;overflow:visible;margin:18px auto 26px;z-index:1}.ic-sitewide-ad-slot img,.ic-sitewide-ad-slot video{max-height:420px}}
+      @media(max-width:1320px){.ic-sitewide-ad-rail{left:auto;right:18px;width:220px}}
+      @media(max-width:1050px){.ic-sitewide-ad-rail{position:relative;left:auto;right:auto;top:auto;width:300px;max-width:calc(100vw - 32px);margin:22px auto 30px;z-index:1}.ic-sitewide-ad-slot img,.ic-sitewide-ad-slot video{max-height:420px}}
     `}</style>
   </>;
 }
