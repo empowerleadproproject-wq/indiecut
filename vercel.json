@@ -11,6 +11,10 @@
     {
       "path": "/api/independent-music/cron",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/music-video-radar/cron",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
