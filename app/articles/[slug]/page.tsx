@@ -52,6 +52,8 @@ export default async function ArticlePage({params}:{params:{slug:string}}){
  ]);
  let ads:any[]=[];try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}
  let music:any=null;try{music=musicRow?.setting_value?JSON.parse(musicRow.setting_value):null}catch{}
+ const supplementalMedia=String(music?.spotify||music?.media_url||'').trim();
+ const showSupplementalMedia=Boolean(supplementalMedia&&supplementalMedia!==data.featured_media_url&&isPlayableEmbed(supplementalMedia));
  const now=new Date().toISOString().slice(0,10);
  const liveAds=ads.filter(a=>a?.creative_url&&a.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now));
  const railAds=shuffled(liveAds).slice(0,4);
@@ -60,7 +62,7 @@ export default async function ArticlePage({params}:{params:{slug:string}}){
   <div className="ic-article-page-grid">
    <article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIE CUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{data.author_name||'Indie Cut Editorial'}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
     {data.featured_media_url&&<FeaturedMedia url={data.featured_media_url} headline={data.headline}/>} 
-    {music?.media_url&&music.media_url!==data.featured_media_url&&<section style={{margin:'24px 0'}}><div className="kicker">LISTEN / WATCH</div>{music.title&&<h3>{music.title}</h3>}<FeaturedMedia url={music.media_url} headline={music.title||data.headline}/></section>}
+    {showSupplementalMedia&&<section style={{margin:'24px 0'}}><div className="kicker">LISTEN / WATCH</div>{music.title&&<h3>{music.title}</h3>}<FeaturedMedia url={supplementalMedia} headline={music.title||data.headline}/></section>}
     {paragraphs.map((p:string,i:number)=><p key={i}>{p}</p>)}
     {Array.isArray(data.sources)&&data.sources.length>0&&<section><div className="kicker">VERIFIED SOURCES</div><ul>{data.sources.map((s:string,i:number)=><li key={i}><a href={s} target="_blank" rel="noreferrer">{s}</a></li>)}</ul></section>}
    </article>
