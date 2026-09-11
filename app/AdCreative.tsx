@@ -1,10 +1,14 @@
 'use client';
 
-import {useState} from 'react';
+function isVideoUrl(src:string){
+ return /\.(mp4|webm|mov|m4v)(?:\?|#|$)/i.test(src);
+}
 
 export default function AdCreative({src,alt='',mediaType=''}:{src:string;alt?:string;mediaType?:string}){
- const knownImage=String(mediaType).startsWith('image/');
- const [showImage,setShowImage]=useState(knownImage);
- if(showImage)return <img src={src} alt={alt}/>;
- return <video src={src} autoPlay muted loop playsInline controls preload="metadata" onError={()=>setShowImage(true)}/>;
+ const type=String(mediaType||'').toLowerCase();
+ const shouldRenderVideo=type.startsWith('video/')||isVideoUrl(src);
+ if(shouldRenderVideo){
+  return <video src={src} autoPlay muted loop playsInline controls={false} preload="metadata"/>;
+ }
+ return <img src={src} alt={alt}/>;
 }
