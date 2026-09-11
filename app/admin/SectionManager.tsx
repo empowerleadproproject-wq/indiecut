@@ -2,6 +2,7 @@
 
 import {useEffect,useState} from 'react';
 import {compressImage} from '../../lib/compressImage';
+import {createClient as createBrowserClient} from '../../lib/supabase/browser';
 
 type AnyRow=Record<string,any>;
 const defaults:Record<string,AnyRow>={
@@ -25,33 +26,29 @@ export default function SectionManager({section}:{section:string}){
  async function save(){setBusy(true);setMessage('');try{let payload={...form};if(section==='articles')payload.sources=String(form.sources||'').split('\n').map((x:string)=>x.trim()).filter(Boolean);if(section==='advertising')payload={advertiser:String(form.advertiser||''),title:String(form.title||''),creative_url:String(form.creative_url||''),creative_media_type:String(form.creative_media_type||previews.creative_url?.type||''),destination_url:String(form.destination_url||''),placement:String(form.placement||'right-rail'),start_date:String(form.start_date||''),end_date:String(form.end_date||''),active:form.active!==false};const method=editingId?'PUT':'POST';const body=editingId?{section,id:editingId,data:payload}:{section,data:payload};const r=await fetch('/api/admin/data',{method,headers:{'content-type':'application/json'},body:JSON.stringify(body)});const text=await r.text();let j:any={};try{j=text?JSON.parse(text):{}}catch{j={error:text||`Save failed (${r.status})`}}if(!r.ok)throw new Error(j.error||`Save failed (${r.status})`);setMessage(section==='advertising'?'Advertisement saved and activated.':editingId?'Updated.':'Saved.');setEditingId(null);setPreviews({});if(section!=='homepage'&&section!=='settings')setForm(defaults[section]||{});await load()}catch(e:any){setMessage(e.message)}finally{setBusy(false)}}
  async function publish(r:AnyRow){
   const needsVerification=String(r.verification_status||'pending')!=='verified';
-  if(needsVerification){
-   const ok=confirm('This article is still marked PENDING VERIFICATION. Publish it as verified now? Only continue if you reviewed the flagged facts and sources.');
-   if(!ok){setMessage('Article left as pending. Review the verification notes before publishing.');return}
-  }
+  if(needsVerification){const ok=confirm('This article is still marked PENDING VERIFICATION. Publish it as verified now? Only continue if you reviewed the flagged facts and sources.');if(!ok){setMessage('Article left as pending. Review the verification notes before publishing.');return}}
   setBusy(true);setMessage('');
-  try{
-   const data={...r,status:'published',verification_status:'verified'};
-   const res=await fetch('/api/admin/data',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({section:'articles',id:r.id,data})});
-   const j=await res.json();if(!res.ok)throw new Error(j.error||'Publish failed');
-   setMessage(needsVerification?'Verified and published to Indie Cut.':'Published to Indie Cut.');
-   await load();
-  }catch(e:any){setMessage(e.message)}finally{setBusy(false)}
+  try{const data={...r,status:'published',verification_status:'verified'};const res=await fetch('/api/admin/data',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({section:'articles',id:r.id,data})});const j=await res.json();if(!res.ok)throw new Error(j.error||'Publish failed');setMessage(needsVerification?'Verified and published to Indie Cut.':'Published to Indie Cut.');await load()}catch(e:any){setMessage(e.message)}finally{setBusy(false)}
  }
- async function verifyPublished(r:AnyRow){
-  const ok=confirm('This article is already marked published but is hidden because verification is still pending. Mark it VERIFIED and make it live now?');
-  if(!ok)return;
-  setBusy(true);setMessage('');
-  try{
-   const data={...r,status:'published',verification_status:'verified'};
-   const res=await fetch('/api/admin/data',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({section:'articles',id:r.id,data})});
-   const j=await res.json();if(!res.ok)throw new Error(j.error||'Verification update failed');
-   setMessage('Article verified and made live.');
-   await load();
-  }catch(e:any){setMessage(e.message)}finally{setBusy(false)}
- }
+ async function verifyPublished(r:AnyRow){const ok=confirm('This article is already marked published but is hidden because verification is still pending. Mark it VERIFIED and make it live now?');if(!ok)return;setBusy(true);setMessage('');try{const data={...r,status:'published',verification_status:'verified'};const res=await fetch('/api/admin/data',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({section:'articles',id:r.id,data})});const j=await res.json();if(!res.ok)throw new Error(j.error||'Verification update failed');setMessage('Article verified and made live.');await load()}catch(e:any){setMessage(e.message)}finally{setBusy(false)}}
  async function remove(id:string){if(!confirm('Delete this item?'))return;const r=await fetch(`/api/admin/data?section=${encodeURIComponent(section)}&id=${encodeURIComponent(id)}`,{method:'DELETE'});const j=await r.json();if(!r.ok){setMessage(j.error||'Delete failed');return}await load()}
- async function upload(field:string,file?:File){if(!file)return;setBusy(true);setMessage('Preparing media…');const localUrl=URL.createObjectURL(file);setPreviews((p:AnyRow)=>({...p,[field]:{url:localUrl,type:file.type}}));try{const prepared=await compressImage(file);const fd=new FormData();fd.append('file',prepared);setMessage(prepared.size!==file.size?'Image optimized. Uploading…':'Uploading…');const r=await fetch('/api/admin/upload',{method:'POST',body:fd});const text=await r.text();let j:any={};try{j=text?JSON.parse(text):{}}catch{j={error:text||`Upload failed (${r.status})`}}if(!r.ok)throw new Error(j.error||'Upload failed');const mediaType=String(prepared.type||file.type||'');setForm((f:AnyRow)=>field==='creative_url'?({...f,[field]:j.publicUrl,creative_media_type:mediaType}):({...f,[field]:j.publicUrl}));setPreviews((p:AnyRow)=>({...p,[field]:{url:j.publicUrl,type:mediaType}}));setMessage('Upload complete — preview shown below. Click SAVE to activate this ad.');}catch(e:any){setMessage(e.message)}finally{setBusy(false)}}
+ async function upload(field:string,file?:File){
+  if(!file)return;setBusy(true);setMessage('Preparing media…');const localUrl=URL.createObjectURL(file);setPreviews((p:AnyRow)=>({...p,[field]:{url:localUrl,type:file.type}}));
+  try{
+   const prepared=file.type.startsWith('image/')?await compressImage(file):file;
+   const mediaType=String(prepared.type||file.type||'application/octet-stream');
+   setMessage(prepared.size!==file.size?'Image optimized. Preparing direct upload…':'Preparing direct upload…');
+   const signRes=await fetch('/api/admin/upload-url',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fileName:prepared.name||file.name,mime:mediaType,size:prepared.size})});
+   const signText=await signRes.text();let signed:any={};try{signed=signText?JSON.parse(signText):{}}catch{signed={error:signText||`Upload setup failed (${signRes.status})`}}if(!signRes.ok)throw new Error(signed.error||'Unable to prepare upload');
+   setMessage('Uploading directly to media storage…');
+   const supabase=createBrowserClient();
+   const {error:uploadError}=await supabase.storage.from(signed.bucket).uploadToSignedUrl(signed.path,signed.token,prepared,{contentType:mediaType});
+   if(uploadError)throw new Error(uploadError.message||'Direct upload failed');
+   setForm((f:AnyRow)=>field==='creative_url'?({...f,[field]:signed.publicUrl,creative_media_type:mediaType}):({...f,[field]:signed.publicUrl}));
+   setPreviews((p:AnyRow)=>({...p,[field]:{url:signed.publicUrl,type:mediaType}}));
+   setMessage(field==='creative_url'?'Upload complete. Click SAVE to activate this ad.':'Upload complete — preview shown below.');
+  }catch(e:any){setMessage(e.message||'Upload failed')}finally{setBusy(false)}
+ }
  async function runAgent(){setBusy(true);setAgentResult(null);setMessage('');try{const r=await fetch('/api/content-agent/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({topic,count:agentCount})});const j=await r.json();setAgentResult(j);if(!r.ok)setMessage(j.error||'Agent failed')}finally{setBusy(false)}}
  if(section==='content-agent')return <section className="ic-module-panel"><h2>Verified Entertainment Research</h2><p>Ask for current stories. Verified stories are automatically saved to <strong>Articles → Drafts</strong> for review. Choose how many different articles you want created in one run. Nothing is published automatically.</p><label>Research assignment</label><textarea rows={6} value={topic} onChange={e=>setTopic(e.target.value)}/><label>How many articles?<input type="number" min="1" max="12" value={agentCount} onChange={e=>setAgentCount(Math.min(12,Math.max(1,Number(e.target.value)||1)))}/><small style={{display:'block',marginTop:6,color:'#666'}}>Create 1–12 different verified article drafts per run.</small></label><button onClick={runAgent} disabled={busy}>{busy?`RESEARCHING ${agentCount} ARTICLE${agentCount===1?'':'S'}…`:`CREATE ${agentCount} VERIFIED ARTICLE${agentCount===1?'':'S'}`}</button>{agentResult&&<div className="ic-agent-results"><h3>Research complete</h3><p>{(agentResult.created||[]).length} of {agentResult.requested||agentCount} requested article(s) were created as drafts.</p>{(agentResult.created||[]).length===0&&<p>No drafts were created.</p>}{(agentResult.created||[]).map((r:any,i:number)=><article className="ic-agent-card" key={r.slug||i}>{r.image&&<img src={r.image} alt="Story image candidate" className="ic-agent-thumb"/>}<div><span className="ic-status-pill">{String(r.verification_status||'verified').toUpperCase()} DRAFT</span><h3>{r.headline}</h3><p>{r.category} · {r.sources} source(s) · {r.image?'image found':'no image found'}</p></div><a className="ic-link-button" href="/admin/articles">REVIEW IN ARTICLES →</a></article>)}{(agentResult.rejected||[]).length>0&&<details><summary>{agentResult.rejected.length} rejected result(s)</summary>{agentResult.rejected.map((r:any,i:number)=><p key={i}><strong>{r.headline}</strong>: {r.reason}</p>)}</details>}</div>}</section>;
  if(section==='analytics')return <section className="ic-module-panel"><h2>Analytics</h2><p>Publication analytics will populate as Indie Cut receives traffic and content activity.</p></section>;
