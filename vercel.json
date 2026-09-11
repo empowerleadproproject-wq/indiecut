@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/breaking-news/cron",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 */2 * * *"
     },
     {
       "path": "/api/independent-music/cron",
