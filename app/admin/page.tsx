@@ -10,6 +10,7 @@ const modules=[
  {slug:'artists',label:'Artists & People',description:'Manage actors, musicians, filmmakers, creators and emerging talent profiles.'},
  {slug:'music',label:'Music',description:'Add songs, performances, releases, covers and artist media.'},
  {slug:'independent-music',label:'Independent Music Radar',description:'Find trending independent R&B, hip-hop, soul, Afrobeats and other emerging urban artists.'},
+ {slug:'music-video-radar',label:'Music Video Radar',description:'Find official new music videos from independent and major artists, preview them, and publish them to Watch.'},
  {slug:'video-media',label:'Video & Media',description:'Upload videos, images, thumbnails and editorial media.'},
  {slug:'breaking-news',label:'Breaking News Radar',description:'Scan live sources for fresh entertainment developments, rank urgency and create verified drafts fast.'},
  {slug:'content-agent',label:'AI Content Agent',description:'Research current entertainment news, verify sources and create review-ready drafts.'},
