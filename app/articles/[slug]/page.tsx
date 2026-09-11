@@ -26,9 +26,9 @@ function db(){return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,p
 function categoryPath(category?:string|null){const value=String(category||'').toLowerCase();return ['movies','tv','music','culture','independent'].includes(value)?`/${value}`:'/articles'}
 const SITE_URL=(process.env.NEXT_PUBLIC_SITE_URL||'https://indiecut.vercel.app').replace(/\/$/,'');
 
-async function FeaturedMedia({url,headline}:{url:string;headline:string}){
+async function FeaturedMedia({url,headline,showSpotifyArtwork=true}:{url:string;headline:string;showSpotifyArtwork?:boolean}){
  const sp=spotifyEmbed(url);const yt=youtubeEmbed(url);const sc=soundcloudEmbed(url);
- if(sp){const cover=await spotifyCover(url);return <section style={{margin:'26px 0'}}>{cover&&<img src={cover} alt={headline} style={{display:'block',width:'100%',maxWidth:760,margin:'0 auto 20px',objectFit:'cover'}}/>}<iframe src={sp} width="100%" height="352" style={{border:0,borderRadius:12}} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title={`${headline} Spotify player`}/></section>}
+ if(sp){const cover=showSpotifyArtwork?await spotifyCover(url):'';return <section style={{margin:'26px 0'}}>{cover&&<img src={cover} alt={headline} style={{display:'block',width:'100%',maxWidth:760,margin:'0 auto 20px',objectFit:'cover'}}/>}<iframe src={sp} width="100%" height="352" style={{border:0,borderRadius:12}} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title={`${headline} Spotify player`}/></section>}
  if(yt)return <section style={{margin:'26px 0'}}><div style={{position:'relative',paddingBottom:'56.25%',height:0,overflow:'hidden',borderRadius:12}}><iframe src={yt} title={`${headline} video`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{position:'absolute',inset:0,width:'100%',height:'100%',border:0}}/></div></section>;
  if(sc)return <section style={{margin:'26px 0'}}><iframe width="100%" height="166" scrolling="no" frameBorder="no" allow="autoplay" src={sc} title={`${headline} SoundCloud player`}/></section>;
  if(video(url))return <video className="article-video" src={url} controls playsInline/>;
@@ -62,7 +62,7 @@ export default async function ArticlePage({params}:{params:{slug:string}}){
   <div className="ic-article-page-grid">
    <article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIE CUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{data.author_name||'Indie Cut Editorial'}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
     {data.featured_media_url&&<FeaturedMedia url={data.featured_media_url} headline={data.headline}/>} 
-    {showSupplementalMedia&&<section style={{margin:'24px 0'}}><div className="kicker">LISTEN / WATCH</div>{music.title&&<h3>{music.title}</h3>}<FeaturedMedia url={supplementalMedia} headline={music.title||data.headline}/></section>}
+    {showSupplementalMedia&&<section style={{margin:'24px 0'}}><div className="kicker">LISTEN / WATCH</div>{music.title&&<h3>{music.title}</h3>}<FeaturedMedia url={supplementalMedia} headline={music.title||data.headline} showSpotifyArtwork={false}/></section>}
     {paragraphs.map((p:string,i:number)=><p key={i}>{p}</p>)}
     {Array.isArray(data.sources)&&data.sources.length>0&&<section><div className="kicker">VERIFIED SOURCES</div><ul>{data.sources.map((s:string,i:number)=><li key={i}><a href={s} target="_blank" rel="noreferrer">{s}</a></li>)}</ul></section>}
    </article>
