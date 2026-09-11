@@ -10,6 +10,7 @@ import SocialAnalytics from '../SocialAnalytics';
 import WebsiteAnalytics from '../WebsiteAnalytics';
 import BreakingNewsRadar from '../BreakingNewsRadar';
 import IndependentMusicRadar from '../IndependentMusicRadar';
+import VideoUploadGuard from '../VideoUploadGuard';
 
 const sections:Record<string,{title:string;intro:string}>={
  homepage:{title:'Homepage',intro:'Control hero content, featured stories and homepage presentation.'},
@@ -34,5 +35,5 @@ export default async function AdminSectionPage({params}:{params:{section:string}
  const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
  if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');
  const content=params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:<SectionManager section={params.section}/>;
- return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{content}{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
+ return <main className="ic-module-page">{params.section==='advertising'&&<VideoUploadGuard/>}<header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{content}{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
 }
