@@ -3,6 +3,7 @@ import {notFound} from 'next/navigation';
 import PublicHeader from '../../PublicHeader';
 import PublicFooter from '../../PublicFooter';
 import ShareButtons from './ShareButtons';
+import AdCreative from './AdCreative';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
 
 export const revalidate=0;
@@ -14,14 +15,13 @@ function soundcloudEmbed(url?:string|null){const s=String(url||'');return /sound
 function isPlayableEmbed(url?:string|null){return Boolean(video(url)||audio(url)||spotifyEmbed(url)||youtubeEmbed(url)||soundcloudEmbed(url))}
 function shuffled<T>(items:T[]){const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
 async function spotifyCover(url?:string|null){if(!spotifyEmbed(url))return '';try{const response=await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(String(url))}`,{cache:'no-store'});if(!response.ok)return '';const data=await response.json();return typeof data?.thumbnail_url==='string'?data.thumbnail_url:''}catch{return ''}}
-async function isVideoCreative(ad:any){const url=String(ad?.creative_url||'');if(!url)return false;if(String(ad?.creative_media_type||'').startsWith('video'))return true;if(video(url))return true;try{const r=await fetch(url,{method:'HEAD',cache:'no-store'});return String(r.headers.get('content-type')||'').startsWith('video/')}catch{return false}}
 function db(){return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}})}
 function categoryPath(category?:string|null){const value=String(category||'').toLowerCase();return ['movies','tv','music','culture','independent'].includes(value)?`/${value}`:'/articles'}
 const SITE_URL=(process.env.NEXT_PUBLIC_SITE_URL||'https://indiecut.vercel.app').replace(/\/$/,'');
 
 async function FeaturedMedia({url,headline,showSpotifyArtwork=true}:{url:string;headline:string;showSpotifyArtwork?:boolean}){const sp=spotifyEmbed(url);const yt=youtubeEmbed(url);const sc=soundcloudEmbed(url);if(sp){const cover=showSpotifyArtwork?await spotifyCover(url):'';return <section style={{margin:'26px 0'}}>{cover&&<img src={cover} alt={headline} style={{display:'block',width:'100%',maxWidth:760,margin:'0 auto 20px',objectFit:'cover'}}/>}<iframe src={sp} width="100%" height="352" style={{border:0,borderRadius:12}} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title={`${headline} Spotify player`}/></section>}if(yt)return <section style={{margin:'26px 0'}}><div style={{position:'relative',paddingBottom:'56.25%',height:0,overflow:'hidden',borderRadius:12}}><iframe src={yt} title={`${headline} video`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{position:'absolute',inset:0,width:'100%',height:'100%',border:0}}/></div></section>;if(sc)return <section style={{margin:'26px 0'}}><iframe width="100%" height="166" scrolling="no" frameBorder="no" allow="autoplay" src={sc} title={`${headline} SoundCloud player`}/></section>;if(video(url))return <video className="article-video" src={url} controls playsInline/>;if(audio(url))return <section style={{margin:'26px 0'}}><audio src={url} controls preload="metadata" style={{width:'100%'}}/></section>;return <img src={url} alt={headline}/>}
 
-function AdUnit({ad,className='ic-article-ad-slot'}:{ad:any;className?:string}){const creative=ad?.creative_url;if(!creative)return null;const media=ad?._isVideo?<video src={creative} autoPlay muted loop playsInline controls={false}/>:<img src={creative} alt={ad.advertiser||ad.title||'Advertisement'}/>;return <div className={className}><span>ADVERTISEMENT</span>{ad.destination_url?<a href={ad.destination_url} target="_blank" rel="noreferrer sponsored">{media}</a>:media}</div>}
+function AdUnit({ad,className='ic-article-ad-slot'}:{ad:any;className?:string}){const creative=ad?.creative_url;if(!creative)return null;const media=<AdCreative src={creative} alt={ad.advertiser||ad.title||'Advertisement'} mediaType={ad.creative_media_type||''} isVideo={Boolean(ad._isVideo)}/>;return <div className={className}><span>ADVERTISEMENT</span>{ad.destination_url?<a href={ad.destination_url} target="_blank" rel="noreferrer sponsored">{media}</a>:media}</div>}
 
 export async function generateMetadata({params}:{params:{slug:string}}):Promise<Metadata>{const {data}=await db().from('articles').select('headline,subheadline,featured_media_url,slug').eq('slug',decodeURIComponent(params.slug)).eq('status','published').eq('verification_status','verified').maybeSingle();if(!data)return {title:'Indie Cut'};const url=`${SITE_URL}/articles/${encodeURIComponent(data.slug)}`;const description=data.subheadline||data.headline;const spotifyImage=data.featured_media_url?await spotifyCover(data.featured_media_url):'';const image=spotifyImage||(data.featured_media_url&&!isPlayableEmbed(data.featured_media_url)?data.featured_media_url:undefined);return {title:`${data.headline} | Indie Cut`,description,alternates:{canonical:url},openGraph:{type:'article',siteName:'Indie Cut',title:data.headline,description,url,images:image?[{url:image,alt:data.headline}]:undefined},twitter:{card:image?'summary_large_image':'summary',title:data.headline,description,images:image?[image]:undefined}}}
 
@@ -31,10 +31,9 @@ export default async function ArticlePage({params}:{params:{slug:string}}){
  let ads:any[]=[];try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}let music:any=null;try{music=musicRow?.setting_value?JSON.parse(musicRow.setting_value):null}catch{}
  const supplementalMedia=String(music?.spotify||music?.media_url||'').trim();const showSupplementalMedia=Boolean(supplementalMedia&&supplementalMedia!==data.featured_media_url&&isPlayableEmbed(supplementalMedia));
  const now=new Date().toISOString().slice(0,10);const liveAds=ads.filter(a=>a?.creative_url&&a.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now));
- const typedAds=await Promise.all(liveAds.map(async a=>({...a,_isVideo:await isVideoCreative(a)})));
- const railAds=shuffled(typedAds.filter(a=>!a.placement||a.placement==='right-rail')).slice(0,4);
- const topAds=shuffled(typedAds.filter(a=>a.placement==='article-top')).slice(0,1);
- const inlineAds=shuffled(typedAds.filter(a=>a.placement==='article-inline')).slice(0,2);
+ const railAds=shuffled(liveAds.filter(a=>!a.placement||a.placement==='right-rail')).slice(0,4);
+ const topAds=shuffled(liveAds.filter(a=>a.placement==='article-top')).slice(0,1);
+ const inlineAds=shuffled(liveAds.filter(a=>a.placement==='article-inline')).slice(0,2);
  const paragraphs=String(data.body||'').split(/\n\n+/).filter(Boolean);
  return <main><PublicHeader/><div className="ic-article-page-grid"><article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIE CUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{data.author_name||'Indie Cut Editorial'}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
    {topAds.map((ad:any,i:number)=><AdUnit key={ad._id||ad.id||`top-${i}`} ad={ad} className="ic-article-top-ad"/>)}
