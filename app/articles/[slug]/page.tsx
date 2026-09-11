@@ -13,71 +13,38 @@ function youtubeEmbed(url?:string|null){const s=String(url||'');let id='';try{co
 function soundcloudEmbed(url?:string|null){const s=String(url||'');return /soundcloud\.com\//i.test(s)?`https://w.soundcloud.com/player/?url=${encodeURIComponent(s)}&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=false`:''}
 function isPlayableEmbed(url?:string|null){return Boolean(video(url)||audio(url)||spotifyEmbed(url)||youtubeEmbed(url)||soundcloudEmbed(url))}
 function shuffled<T>(items:T[]){const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
-async function spotifyCover(url?:string|null){
- if(!spotifyEmbed(url))return '';
- try{
-  const response=await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(String(url))}`,{cache:'no-store'});
-  if(!response.ok)return '';
-  const data=await response.json();
-  return typeof data?.thumbnail_url==='string'?data.thumbnail_url:'';
- }catch{return ''}
-}
+async function spotifyCover(url?:string|null){if(!spotifyEmbed(url))return '';try{const response=await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(String(url))}`,{cache:'no-store'});if(!response.ok)return '';const data=await response.json();return typeof data?.thumbnail_url==='string'?data.thumbnail_url:''}catch{return ''}}
 function db(){return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}})}
 function categoryPath(category?:string|null){const value=String(category||'').toLowerCase();return ['movies','tv','music','culture','independent'].includes(value)?`/${value}`:'/articles'}
 const SITE_URL=(process.env.NEXT_PUBLIC_SITE_URL||'https://indiecut.vercel.app').replace(/\/$/,'');
 
-async function FeaturedMedia({url,headline,showSpotifyArtwork=true}:{url:string;headline:string;showSpotifyArtwork?:boolean}){
- const sp=spotifyEmbed(url);const yt=youtubeEmbed(url);const sc=soundcloudEmbed(url);
- if(sp){const cover=showSpotifyArtwork?await spotifyCover(url):'';return <section style={{margin:'26px 0'}}>{cover&&<img src={cover} alt={headline} style={{display:'block',width:'100%',maxWidth:760,margin:'0 auto 20px',objectFit:'cover'}}/>}<iframe src={sp} width="100%" height="352" style={{border:0,borderRadius:12}} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title={`${headline} Spotify player`}/></section>}
- if(yt)return <section style={{margin:'26px 0'}}><div style={{position:'relative',paddingBottom:'56.25%',height:0,overflow:'hidden',borderRadius:12}}><iframe src={yt} title={`${headline} video`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{position:'absolute',inset:0,width:'100%',height:'100%',border:0}}/></div></section>;
- if(sc)return <section style={{margin:'26px 0'}}><iframe width="100%" height="166" scrolling="no" frameBorder="no" allow="autoplay" src={sc} title={`${headline} SoundCloud player`}/></section>;
- if(video(url))return <video className="article-video" src={url} controls playsInline/>;
- if(audio(url))return <section style={{margin:'26px 0'}}><audio src={url} controls preload="metadata" style={{width:'100%'}}/></section>;
- return <img src={url} alt={headline}/>;
-}
+async function FeaturedMedia({url,headline,showSpotifyArtwork=true}:{url:string;headline:string;showSpotifyArtwork?:boolean}){const sp=spotifyEmbed(url);const yt=youtubeEmbed(url);const sc=soundcloudEmbed(url);if(sp){const cover=showSpotifyArtwork?await spotifyCover(url):'';return <section style={{margin:'26px 0'}}>{cover&&<img src={cover} alt={headline} style={{display:'block',width:'100%',maxWidth:760,margin:'0 auto 20px',objectFit:'cover'}}/>}<iframe src={sp} width="100%" height="352" style={{border:0,borderRadius:12}} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" title={`${headline} Spotify player`}/></section>}if(yt)return <section style={{margin:'26px 0'}}><div style={{position:'relative',paddingBottom:'56.25%',height:0,overflow:'hidden',borderRadius:12}}><iframe src={yt} title={`${headline} video`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{position:'absolute',inset:0,width:'100%',height:'100%',border:0}}/></div></section>;if(sc)return <section style={{margin:'26px 0'}}><iframe width="100%" height="166" scrolling="no" frameBorder="no" allow="autoplay" src={sc} title={`${headline} SoundCloud player`}/></section>;if(video(url))return <video className="article-video" src={url} controls playsInline/>;if(audio(url))return <section style={{margin:'26px 0'}}><audio src={url} controls preload="metadata" style={{width:'100%'}}/></section>;return <img src={url} alt={headline}/>}
 
-export async function generateMetadata({params}:{params:{slug:string}}):Promise<Metadata>{
- const {data}=await db().from('articles').select('headline,subheadline,featured_media_url,slug').eq('slug',decodeURIComponent(params.slug)).eq('status','published').eq('verification_status','verified').maybeSingle();
- if(!data)return {title:'Indie Cut'};
- const url=`${SITE_URL}/articles/${encodeURIComponent(data.slug)}`;const description=data.subheadline||data.headline;const spotifyImage=data.featured_media_url?await spotifyCover(data.featured_media_url):'';const image=spotifyImage||(data.featured_media_url&&!isPlayableEmbed(data.featured_media_url)?data.featured_media_url:undefined);
- return {title:`${data.headline} | Indie Cut`,description,alternates:{canonical:url},openGraph:{type:'article',siteName:'Indie Cut',title:data.headline,description,url,images:image?[{url:image,alt:data.headline}]:undefined},twitter:{card:image?'summary_large_image':'summary',title:data.headline,description,images:image?[image]:undefined}};
-}
+function AdUnit({ad,className='ic-article-ad-slot'}:{ad:any;className?:string}){const creative=ad?.creative_url;if(!creative)return null;const media=video(creative)?<video src={creative} autoPlay muted loop playsInline/>:<img src={creative} alt={ad.advertiser||ad.title||'Advertisement'}/>;return <div className={className}><span>ADVERTISEMENT</span>{ad.destination_url?<a href={ad.destination_url} target="_blank" rel="noreferrer sponsored">{media}</a>:media}</div>}
+
+export async function generateMetadata({params}:{params:{slug:string}}):Promise<Metadata>{const {data}=await db().from('articles').select('headline,subheadline,featured_media_url,slug').eq('slug',decodeURIComponent(params.slug)).eq('status','published').eq('verification_status','verified').maybeSingle();if(!data)return {title:'Indie Cut'};const url=`${SITE_URL}/articles/${encodeURIComponent(data.slug)}`;const description=data.subheadline||data.headline;const spotifyImage=data.featured_media_url?await spotifyCover(data.featured_media_url):'';const image=spotifyImage||(data.featured_media_url&&!isPlayableEmbed(data.featured_media_url)?data.featured_media_url:undefined);return {title:`${data.headline} | Indie Cut`,description,alternates:{canonical:url},openGraph:{type:'article',siteName:'Indie Cut',title:data.headline,description,url,images:image?[{url:image,alt:data.headline}]:undefined},twitter:{card:image?'summary_large_image':'summary',title:data.headline,description,images:image?[image]:undefined}}}
 
 export default async function ArticlePage({params}:{params:{slug:string}}){
- const client=db();
- const {data}=await client.from('articles').select('*').eq('slug',decodeURIComponent(params.slug)).eq('status','published').eq('verification_status','verified').maybeSingle();if(!data)notFound();
- const [{data:adRow},{data:musicRow}]=await Promise.all([
-  client.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle(),
-  client.from('site_settings').select('setting_value').eq('setting_key',`article_media_${data.id}`).maybeSingle()
- ]);
- let ads:any[]=[];try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}
- let music:any=null;try{music=musicRow?.setting_value?JSON.parse(musicRow.setting_value):null}catch{}
- const supplementalMedia=String(music?.spotify||music?.media_url||'').trim();
- const showSupplementalMedia=Boolean(supplementalMedia&&supplementalMedia!==data.featured_media_url&&isPlayableEmbed(supplementalMedia));
- const now=new Date().toISOString().slice(0,10);
- const liveAds=ads.filter(a=>a?.creative_url&&a.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now));
- const railAds=shuffled(liveAds).slice(0,4);
+ const client=db();const {data}=await client.from('articles').select('*').eq('slug',decodeURIComponent(params.slug)).eq('status','published').eq('verification_status','verified').maybeSingle();if(!data)notFound();
+ const [{data:adRow},{data:musicRow}]=await Promise.all([client.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle(),client.from('site_settings').select('setting_value').eq('setting_key',`article_media_${data.id}`).maybeSingle()]);
+ let ads:any[]=[];try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}let music:any=null;try{music=musicRow?.setting_value?JSON.parse(musicRow.setting_value):null}catch{}
+ const supplementalMedia=String(music?.spotify||music?.media_url||'').trim();const showSupplementalMedia=Boolean(supplementalMedia&&supplementalMedia!==data.featured_media_url&&isPlayableEmbed(supplementalMedia));
+ const now=new Date().toISOString().slice(0,10);const liveAds=ads.filter(a=>a?.creative_url&&a.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now));
+ const railAds=shuffled(liveAds.filter(a=>!a.placement||a.placement==='right-rail')).slice(0,4);
+ const topAds=shuffled(liveAds.filter(a=>a.placement==='article-top')).slice(0,1);
+ const inlineAds=shuffled(liveAds.filter(a=>a.placement==='article-inline')).slice(0,2);
  const paragraphs=String(data.body||'').split(/\n\n+/).filter(Boolean);
- return <main><PublicHeader/>
-  <div className="ic-article-page-grid">
-   <article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIE CUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{data.author_name||'Indie Cut Editorial'}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
-    {data.featured_media_url&&<FeaturedMedia url={data.featured_media_url} headline={data.headline}/>} 
-    {showSupplementalMedia&&<section style={{margin:'24px 0'}}><div className="kicker">LISTEN / WATCH</div>{music.title&&<h3>{music.title}</h3>}<FeaturedMedia url={supplementalMedia} headline={music.title||data.headline} showSpotifyArtwork={false}/></section>}
-    {paragraphs.map((p:string,i:number)=><p key={i}>{p}</p>)}
-    {Array.isArray(data.sources)&&data.sources.length>0&&<section><div className="kicker">VERIFIED SOURCES</div><ul>{data.sources.map((s:string,i:number)=><li key={i}><a href={s} target="_blank" rel="noreferrer">{s}</a></li>)}</ul></section>}
-   </article>
-   {railAds.length>0&&<aside className="ic-article-ad-rail" aria-label="Advertisements">{railAds.map((ad:any,i:number)=><div className="ic-article-ad-slot" key={ad._id||ad.id||`${ad.creative_url}-${i}`}><span>ADVERTISEMENT</span>{ad.destination_url?<a href={ad.destination_url} target="_blank" rel="noreferrer sponsored">{video(ad.creative_url)?<video src={ad.creative_url} autoPlay muted loop playsInline/>:<img src={ad.creative_url} alt={ad.advertiser||'Advertisement'}/>}</a>:(video(ad.creative_url)?<video src={ad.creative_url} autoPlay muted loop playsInline/>:<img src={ad.creative_url} alt={ad.advertiser||'Advertisement'}/>)}</div>)}</aside>}
-  </div>
+ return <main><PublicHeader/><div className="ic-article-page-grid"><article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIE CUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{data.author_name||'Indie Cut Editorial'}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
+   {topAds.map((ad:any,i:number)=><AdUnit key={ad._id||ad.id||`top-${i}`} ad={ad} className="ic-article-top-ad"/>)}
+   {data.featured_media_url&&<FeaturedMedia url={data.featured_media_url} headline={data.headline}/>} 
+   {showSupplementalMedia&&<section style={{margin:'24px 0'}}><div className="kicker">LISTEN / WATCH</div>{music.title&&<h3>{music.title}</h3>}<FeaturedMedia url={supplementalMedia} headline={music.title||data.headline} showSpotifyArtwork={false}/></section>}
+   {paragraphs.map((p:string,i:number)=><div key={i}><p>{p}</p>{i===1&&inlineAds[0]&&<AdUnit ad={inlineAds[0]} className="ic-article-inline-ad"/>}{i===4&&inlineAds[1]&&<AdUnit ad={inlineAds[1]} className="ic-article-inline-ad"/>}</div>)}
+   {Array.isArray(data.sources)&&data.sources.length>0&&<section><div className="kicker">VERIFIED SOURCES</div><ul>{data.sources.map((s:string,i:number)=><li key={i}><a href={s} target="_blank" rel="noreferrer">{s}</a></li>)}</ul></section>}
+  </article>{railAds.length>0&&<aside className="ic-article-ad-rail" aria-label="Advertisements">{railAds.map((ad:any,i:number)=><AdUnit key={ad._id||ad.id||`${ad.creative_url}-${i}`} ad={ad}/>)}</aside>}</div>
   <style>{`
-   .ic-article-page-grid{width:min(1220px,calc(100% - 40px));margin:0 auto;display:grid;grid-template-columns:minmax(0,850px) 290px;gap:36px;align-items:start}
-   .ic-article-page-grid .article{width:auto;max-width:none;margin:0;padding-left:0;padding-right:0}
-   .ic-article-ad-rail{padding-top:50px;display:flex;flex-direction:column;gap:20px}
-   .ic-article-ad-slot{width:100%;border:1px solid #ddd;background:#fff;padding:8px}
-   .ic-article-ad-slot>span{display:block;font-size:9px;line-height:1;letter-spacing:1.2px;color:#888;margin-bottom:7px;font-weight:700}
-   .ic-article-ad-slot a{display:block}
-   .ic-article-ad-slot img,.ic-article-ad-slot video{display:block;width:100%;height:auto;max-height:390px;object-fit:contain;margin:0;background:#f7f7f7}
-   @media(max-width:1100px){.ic-article-page-grid{display:block;width:min(850px,calc(100% - 32px))}.ic-article-ad-rail{display:none}.ic-article-page-grid .article{padding-left:0;padding-right:0}}
-  `}</style>
-  <PublicFooter/>
- </main>
+   .ic-article-page-grid{width:min(1240px,calc(100% - 40px));margin:0 auto;display:grid;grid-template-columns:minmax(0,850px) 320px;gap:36px;align-items:start}
+   .ic-article-page-grid .article{width:auto;max-width:none;margin:0;padding-left:0;padding-right:0}.ic-article-ad-rail{padding-top:50px;display:flex;flex-direction:column;gap:24px;position:sticky;top:76px;align-self:start}.ic-article-ad-slot{width:100%;border-top:1px solid #ccc;border-bottom:1px solid #ddd;background:#fff;padding:10px 0 16px}.ic-article-ad-slot>span,.ic-article-top-ad>span,.ic-article-inline-ad>span{display:block;text-align:center;font-size:9px;line-height:1;letter-spacing:1.2px;color:#888;margin-bottom:9px;font-weight:700}.ic-article-ad-slot a,.ic-article-top-ad a,.ic-article-inline-ad a{display:block}.ic-article-ad-slot img,.ic-article-ad-slot video{display:block;width:100%;height:auto;max-height:500px;object-fit:contain;margin:0;background:#fff}.ic-article-top-ad,.ic-article-inline-ad{width:100%;margin:24px 0;padding:10px 0 16px;border-top:1px solid #ddd;border-bottom:1px solid #ddd}.ic-article-top-ad img,.ic-article-top-ad video,.ic-article-inline-ad img,.ic-article-inline-ad video{display:block;width:100%;height:auto;max-height:520px;object-fit:contain;margin:0 auto;background:#fff}
+   @media(max-width:1100px){.ic-article-page-grid{display:block;width:min(850px,calc(100% - 32px))}.ic-article-page-grid .article{padding-left:0;padding-right:0}.ic-article-ad-rail{position:static;padding-top:28px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}}
+   @media(max-width:640px){.ic-article-ad-rail{grid-template-columns:1fr}}
+  `}</style><PublicFooter/></main>
 }
