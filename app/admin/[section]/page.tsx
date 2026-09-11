@@ -10,7 +10,7 @@ import SocialAnalytics from '../SocialAnalytics';
 import WebsiteAnalytics from '../WebsiteAnalytics';
 import BreakingNewsRadar from '../BreakingNewsRadar';
 import IndependentMusicRadar from '../IndependentMusicRadar';
-import VideoUploadGuard from '../VideoUploadGuard';
+import AdvertisingManager from '../AdvertisingManager';
 
 const sections:Record<string,{title:string;intro:string}>={
  homepage:{title:'Homepage',intro:'Control hero content, featured stories and homepage presentation.'},
@@ -21,7 +21,7 @@ const sections:Record<string,{title:string;intro:string}>={
  'video-media':{title:'Video & Media',intro:'Upload video and photography for stories, artists and homepage placements.'},
  'breaking-news':{title:'Breaking News Radar',intro:'Scan live sources for newly reported entertainment news, verify the strongest leads and move fast without publishing rumors.'},
  'content-agent':{title:'AI Content Agent',intro:'Research current entertainment stories, verify multiple sources, save drafts for review, and schedule automatic research.'},
- 'social-agent':{title:'Social Media Agent',intro:'Automatically turn published Indie Cut stories into platform-ready social posts.'},
+ 'social-agent':{title:'Social Media Agent',intro:'Automatically turn published stories into platform-ready social posts.'},
  advertising:{title:'Advertising',intro:'Manage ad creative, placements, destination links and campaign schedules.'},
  authors:{title:'Authors & Editors',intro:'Manage editorial profiles, headshots, bios and bylines.'},
  analytics:{title:'Analytics',intro:'Review Indie Cut website audience plus live Facebook and Instagram performance.'},
@@ -34,6 +34,6 @@ export default async function AdminSectionPage({params}:{params:{section:string}
  const section=sections[params.section];if(!section)notFound();
  const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
  if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');
- const content=params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:<SectionManager section={params.section}/>;
- return <main className="ic-module-page">{params.section==='advertising'&&<VideoUploadGuard/>}<header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{content}{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
+ const content=params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:params.section==='advertising'?<AdvertisingManager/>:<SectionManager section={params.section}/>;
+ return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{content}{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
 }
