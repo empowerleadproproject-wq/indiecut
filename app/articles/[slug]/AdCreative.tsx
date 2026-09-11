@@ -6,9 +6,9 @@ function isVideoUrl(src:string){
 
 export default function AdCreative({src,alt='',mediaType='',isVideo=false}:{src:string;alt?:string;mediaType?:string;isVideo?:boolean}){
  const type=String(mediaType||'').toLowerCase();
- const shouldRenderVideo=isVideo||type.startsWith('video/')||isVideoUrl(src);
+ const shouldRenderVideo=isVideo||type==='video'||type.startsWith('video/')||isVideoUrl(src);
  if(shouldRenderVideo){
-  return <video src={src} autoPlay muted loop playsInline controls={false} preload="metadata" style={{width:'100%',height:'auto'}}/>;
+  return <video src={src} autoPlay muted loop playsInline controls preload="auto" style={{display:'block',width:'100%',aspectRatio:'16 / 9',objectFit:'contain',background:'#000'}}/>;
  }
  return <img src={src} alt={alt}/>;
 }
