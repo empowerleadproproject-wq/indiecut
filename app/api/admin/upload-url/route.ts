@@ -19,13 +19,13 @@ export async function POST(request:Request){
  const isImage=mime.startsWith('image/'),isVideo=mime.startsWith('video/'),isAudio=mime.startsWith('audio/');
  if(!isImage&&!isVideo&&!isAudio)return NextResponse.json({error:'Only image, video, and audio files can be uploaded.'},{status:400});
  if(size<=0)return NextResponse.json({error:'Invalid file size.'},{status:400});
- const max=isImage?8*1024*1024:100*1024*1024;
- if(size>max)return NextResponse.json({error:isVideo?'Video uploads must be 100 MB or smaller.':'This upload is too large.'},{status:413});
+ const max=isImage?8*1024*1024:500*1024*1024;
+ if(size>max)return NextResponse.json({error:isVideo?'Video uploads must be 500 MB or smaller.':'This upload is too large.'},{status:413});
  const db=createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
  const bucket='indiecut-media';
  const {data:buckets}=await db.storage.listBuckets();
  if(!(buckets||[]).some(b=>b.name===bucket)){
-  const {error:createError}=await db.storage.createBucket(bucket,{public:true,fileSizeLimit:104857600});
+  const {error:createError}=await db.storage.createBucket(bucket,{public:true,fileSizeLimit:524288000});
   if(createError&&!String(createError.message).toLowerCase().includes('already'))return NextResponse.json({error:createError.message},{status:400});
  }
  const ext=fileName.includes('.')?'.'+fileName.split('.').pop()!.replace(/[^a-z0-9]/gi,'').toLowerCase():'';
