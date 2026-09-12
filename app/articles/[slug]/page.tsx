@@ -1,10 +1,12 @@
 import type {Metadata} from 'next';
 import {notFound} from 'next/navigation';
+import {headers} from 'next/headers';
 import PublicHeader from '../../PublicHeader';
 import PublicFooter from '../../PublicFooter';
 import ShareButtons from './ShareButtons';
 import AdCreative from './AdCreative';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
+import {audienceMatches,isLocalTarget,visitorGeoFromHeaders} from '../../../lib/ad-targeting';
 
 export const revalidate=0;
 function video(url?:string|null){return Boolean(url&&/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url))}
@@ -14,9 +16,10 @@ function youtubeEmbed(url?:string|null){const s=String(url||'');let id='';try{co
 function soundcloudEmbed(url?:string|null){const s=String(url||'');return /soundcloud\.com\//i.test(s)?`https://w.soundcloud.com/player/?url=${encodeURIComponent(s)}&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=false`:''}
 function isPlayableEmbed(url?:string|null){return Boolean(video(url)||audio(url)||spotifyEmbed(url)||youtubeEmbed(url)||soundcloudEmbed(url))}
 function shuffled<T>(items:T[]){const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
+function priorityShuffle(items:any[]){return [...shuffled(items.filter(isLocalTarget)),...shuffled(items.filter(a=>!isLocalTarget(a)))]}
 function adIsVideo(a:any){return Boolean(a?._isVideo)||String(a?.creative_media_type||'').startsWith('video/')||String(a?.creative_media_type||'')==='video'||video(a?.creative_url)}
 async function classifyAd(a:any){if(adIsVideo(a))return {...a,_isVideo:true};const url=String(a?.creative_url||'');if(!url)return {...a,_isVideo:false};try{const r=await fetch(url,{method:'HEAD',cache:'no-store'});const type=String(r.headers.get('content-type')||'').toLowerCase();return {...a,_isVideo:type.startsWith('video/')};}catch{return {...a,_isVideo:false}}}
-function pickRailAds(items:any[],limit=4){const pool=shuffled(items);const vid=pool.find(adIsVideo);const rest=pool.filter(a=>a!==vid);return (vid?[vid,...rest]:rest).slice(0,limit)}
+function pickRailAds(items:any[],limit=4){const pool=priorityShuffle(items);const vid=pool.find(adIsVideo);const rest=pool.filter(a=>a!==vid);return (vid?[vid,...rest]:rest).slice(0,limit)}
 async function spotifyCover(url?:string|null){if(!spotifyEmbed(url))return '';try{const response=await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(String(url))}`,{cache:'no-store'});if(!response.ok)return '';const data=await response.json();return typeof data?.thumbnail_url==='string'?data.thumbnail_url:''}catch{return ''}}
 function db(){return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}})}
 function categoryPath(category?:string|null){const value=String(category||'').toLowerCase();return ['movies','tv','music','culture','independent'].includes(value)?`/${value}`:'/articles'}
@@ -33,10 +36,10 @@ export default async function ArticlePage({params}:{params:{slug:string}}){
  const [{data:adRow},{data:musicRow}]=await Promise.all([client.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle(),client.from('site_settings').select('setting_value').eq('setting_key',`article_media_${data.id}`).maybeSingle()]);
  let ads:any[]=[];try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}let music:any=null;try{music=musicRow?.setting_value?JSON.parse(musicRow.setting_value):null}catch{}
  const supplementalMedia=String(music?.spotify||music?.media_url||'').trim();const showSupplementalMedia=Boolean(supplementalMedia&&supplementalMedia!==data.featured_media_url&&isPlayableEmbed(supplementalMedia));
- const now=new Date().toISOString().slice(0,10);const liveAds=ads.filter(a=>a?.creative_url&&a.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now));const typedAds=await Promise.all(liveAds.map(classifyAd));
- const railAds=pickRailAds(typedAds.filter(a=>!a.placement||a.placement==='right-rail'||a.placement==='homepage'),4);
- const topAds=shuffled(typedAds.filter(a=>a.placement==='article-top')).slice(0,1);
- const inlineAds=shuffled(typedAds.filter(a=>a.placement==='article-inline')).slice(0,2);
+ const geo=visitorGeoFromHeaders(headers());const now=new Date().toISOString().slice(0,10);const liveAds=ads.filter(a=>a?.creative_url&&a.active!==false&&(!a.start_date||a.start_date<=now)&&(!a.end_date||a.end_date>=now)&&audienceMatches(a,geo));const typedAds=await Promise.all(liveAds.map(classifyAd));
+ const railAds=pickRailAds(typedAds.filter(a=>!a.placement||a.placement==='right-rail'||a.placement==='homepage'||a.placement==='sitewide'),4);
+ const topAds=priorityShuffle(typedAds.filter(a=>a.placement==='article-top'||a.placement==='sitewide')).slice(0,1);
+ const inlineAds=priorityShuffle(typedAds.filter(a=>a.placement==='article-inline'||a.placement==='sitewide')).slice(0,2);
  const paragraphs=String(data.body||'').split(/\n\n+/).filter(Boolean);
  return <main><PublicHeader/><div className="ic-article-page-grid"><article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIE CUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{data.author_name||'Indie Cut Editorial'}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
    {topAds.map((ad:any,i:number)=><AdUnit key={ad._id||ad.id||`top-${i}`} ad={ad} className="ic-article-top-ad"/>)}
