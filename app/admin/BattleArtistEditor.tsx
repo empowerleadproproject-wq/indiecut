@@ -37,7 +37,7 @@ export default function BattleArtistEditor(){
     setDrafts(x=>({...x,[artist.id]:{
       artist_name:artist.artist_name||'',city:artist.city||'',bio:artist.bio||'',
       image_url:artist.image_url||'',track_title:artist.track_title||'',track_url:artist.track_url||'',
-      track_cover_url:artist.track_cover_url||'',active:artist.active!==false
+      track_cover_url:artist.track_cover_url||'',instagram_url:artist.instagram_url||'',tiktok_url:artist.tiktok_url||'',active:artist.active!==false
     }}));
     setEditing(artist.id);setMessage('');
   }
@@ -63,7 +63,7 @@ export default function BattleArtistEditor(){
 
   return <section className="ic-module-panel" style={{marginBottom:24}}>
     <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'start',flexWrap:'wrap'}}>
-      <div><h2 style={{margin:'0 0 6px'}}>Approved Artist Profiles</h2><p style={{margin:0,maxWidth:820}}>Fully edit the public voting profiles after approval — artist name, location, bio, photo, song title, music file, cover art and whether the profile is active. The genre stays locked to the competition so artists cannot cross genres.</p></div>
+      <div><h2 style={{margin:'0 0 6px'}}>Approved Artist Profiles</h2><p style={{margin:0,maxWidth:820}}>Fully edit the public voting profiles after approval — artist name, location, bio, photo, song title, music file, cover art, Instagram, TikTok and whether the profile is active. The genre stays locked to the competition so artists cannot cross genres.</p></div>
       <strong>{artists.length} ARTIST{artists.length===1?'':'S'}</strong>
     </div>
     {message&&<div className="ic-message" style={{marginTop:14}}>{message}</div>}
@@ -82,6 +82,8 @@ export default function BattleArtistEditor(){
               <label>Location / city, state<input value={d.city||''} onChange={e=>patch(artist.id,'city',e.target.value)} placeholder="New Jersey"/></label>
               <label>Genre<input value={artist.contest_genre||artist.genre||''} readOnly/></label>
               <label>Song title<input value={d.track_title||''} onChange={e=>patch(artist.id,'track_title',e.target.value)}/></label>
+              <label>Instagram<input value={d.instagram_url||''} onChange={e=>patch(artist.id,'instagram_url',e.target.value)} placeholder="@handle or Instagram URL"/></label>
+              <label>TikTok<input value={d.tiktok_url||''} onChange={e=>patch(artist.id,'tiktok_url',e.target.value)} placeholder="@handle or TikTok URL"/></label>
             </div>
             <label>Artist bio<textarea rows={4} value={d.bio||''} onChange={e=>patch(artist.id,'bio',e.target.value)}/></label>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:12}}>
