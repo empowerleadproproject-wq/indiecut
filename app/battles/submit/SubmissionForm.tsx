@@ -2,6 +2,7 @@
 
 import {FormEvent,useState} from 'react';
 import {createClient} from '../../../lib/supabase/browser';
+import {trackMarketingEvent} from '../../../lib/marketing-tracking';
 import * as tus from 'tus-js-client';
 import styles from '../battles.module.css';
 
@@ -53,7 +54,7 @@ export default function SubmissionForm({open=true}:{open?:boolean}){
    let image_url='';if(photo instanceof File&&photo.size){setMessage('Uploading your artist photo…');image_url=await directUpload(photo,'image',percent=>setMessage(`Uploading your artist photo… ${percent}%`))}
    setMessage('Sending your submission for review…');
    const payload={artist_name:String(form.get('artist_name')||''),email:String(form.get('email')||''),phone:String(form.get('phone')||''),track_title:String(form.get('track_title')||''),genre:String(form.get('genre')||''),city:String(form.get('city')||''),instagram:String(form.get('instagram')||''),tiktok:String(form.get('tiktok')||''),bio:String(form.get('bio')||''),website:String(form.get('website')||''),rights:String(form.get('rights')||'')==='yes',marketing_opt_in:String(form.get('marketing_opt_in')||'')==='yes',track_url,image_url};
-   const r=await fetch('/api/battle-submissions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to submit your music.');setSuccess(true);setMessage('Submission received. Indie Cut will review your song inside your genre. If approved, we will activate your Phase One fan-voting profile and give you a shareable voting link. Your Instagram and TikTok links will appear on the artist page so fans can follow you.');target.reset();
+   const r=await fetch('/api/battle-submissions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to submit your music.');trackMarketingEvent('ArtistSubmissionCompleted',{genre:payload.genre,marketing_opt_in:payload.marketing_opt_in});setSuccess(true);setMessage('Submission received. Indie Cut will review your song inside your genre. If approved, we will activate your Phase One fan-voting profile and give you a shareable voting link. Your Instagram and TikTok links will appear on the artist page so fans can follow you.');target.reset();
   }catch(e:any){const raw=String(e?.message||'Upload failed.');setMessage(/gateway timeout|networkerror|failed to fetch/i.test(raw)?'The upload connection was interrupted. Please press Submit for Review again — large songs now resume automatically instead of restarting from zero.':raw)}finally{setBusy(false)}
  }
  if(!open)return <div className={styles.submissionClosed}><h2>Submissions are currently closed.</h2><p>Check back for the next Indie Cut Battle entry period.</p><a href="/battles">BACK TO LIVE BATTLES</a></div>;
