@@ -2,39 +2,40 @@
 
 import {useEffect,useState} from 'react';
 
-type Ad={advertiser?:string;title?:string;creative_url?:string;destination_url?:string;creative_media_type?:string;placement?:string};
+type Ad={advertiser?:string;title?:string;creative_url?:string;destination_url?:string;creative_media_type?:string;placement?:string;_audience_scope?:'local'|'global'};
 function isVideo(ad:Ad){return String(ad.creative_media_type||'').startsWith('video/')||/\.(mp4|webm|mov|m4v)(\?|$)/i.test(String(ad.creative_url||''))}
 function adKey(ad:Ad){return `${ad.creative_url||''}|${ad.destination_url||''}`}
+function shuffled<T>(items:T[]){const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
 
 export default function BattleProfileAds(){
  const [visible,setVisible]=useState<Ad[]>([]);
  useEffect(()=>{
   let off=false;
-  fetch(`/api/public/ads?battleProfile=${Date.now()}`,{cache:'no-store'})
+  fetch(`/api/public/ads?placement=battle-artist&t=${Date.now()}`,{cache:'no-store'})
    .then(r=>r.json())
    .then(j=>{
     if(off)return;
     const rows:Array<Ad>=Array.isArray(j?.ads)?j.ads.filter((a:Ad)=>Boolean(a?.creative_url)):[];
     if(!rows.length){setVisible([]);return;}
 
-    // Battle-artist campaigns are shown first, while other active campaigns remain
-    // eligible so the two slots can keep rotating through the available inventory.
-    const battle=rows.filter(a=>a.placement==='battle-artist');
-    const other=rows.filter(a=>a.placement!=='battle-artist');
+    const local=rows.filter(a=>a._audience_scope==='local');
+    const global=rows.filter(a=>a._audience_scope!=='local');
+    const localBattle=shuffled(local.filter(a=>a.placement==='battle-artist'));
+    const localSitewide=shuffled(local.filter(a=>a.placement!=='battle-artist'));
+    const globalBattle=shuffled(global.filter(a=>a.placement==='battle-artist'));
+    const globalSitewide=shuffled(global.filter(a=>a.placement!=='battle-artist'));
     const seen=new Set<string>();
-    const pool=[...battle,...other].filter(ad=>{const key=adKey(ad);if(seen.has(key))return false;seen.add(key);return true});
+    const pool=[...localBattle,...localSitewide,...globalBattle,...globalSitewide].filter(ad=>{const key=adKey(ad);if(seen.has(key))return false;seen.add(key);return true});
     if(!pool.length){setVisible([]);return;}
 
-    // Show two ads per page load and move forward by two on each reload/navigation.
-    // The first visit begins at a random campaign so visitors do not all start on the same pair.
-    const storageKey='indiecut-battle-profile-ad-pair-index-v2';
+    const storageKey='indiecut-battle-profile-ad-pair-index-v3';
     let start=0;
     try{
       const saved=sessionStorage.getItem(storageKey);
-      if(saved===null){start=Math.floor(Math.random()*pool.length)}
+      if(saved===null){start=0}
       else{start=(Number(saved)+2)%pool.length;if(!Number.isFinite(start))start=0}
       sessionStorage.setItem(storageKey,String(start));
-    }catch{start=Math.floor(Math.random()*pool.length)}
+    }catch{start=0}
 
     const pair:Ad[]=[];
     for(let i=0;i<Math.min(2,pool.length);i++)pair.push(pool[(start+i)%pool.length]);
