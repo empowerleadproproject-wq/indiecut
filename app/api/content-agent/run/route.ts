@@ -15,6 +15,8 @@ function titleWords(v:string){return new Set(String(v||'').toLowerCase().replace
 function titleSimilarity(a:string,b:string){const x=titleWords(a),y=titleWords(b);if(!x.size||!y.size)return 0;let hit=0;for(const w of x)if(y.has(w))hit++;return hit/Math.max(x.size,y.size)}
 function sourceHosts(urls:string[]){const hosts=new Set<string>();for(const u of urls){try{hosts.add(new URL(u).hostname.replace(/^www\./,''))}catch{}}return hosts.size}
 function todayLabel(){return new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',dateStyle:'long'}).format(new Date())}
+function validUrl(value:any){const s=String(value||'').trim();return /^https?:\/\//i.test(s)?s:''}
+function embeddableLeadVideo(value:any){const s=validUrl(value);if(!s)return'';try{const u=new URL(s);if(u.hostname.includes('youtube.com')||u.hostname.includes('youtu.be'))return s}catch{}return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(s)?s:''}
 async function readConfig(supabase:any){const {data}=await supabase.from('site_settings').select('setting_value').eq('setting_key',KEY).maybeSingle();if(!data?.setting_value)return DEFAULTS;try{return {...DEFAULTS,...JSON.parse(data.setting_value),enabled:true}}catch{return DEFAULTS}}
 
 async function callResearchModel(apiKey:string,prompt:string,maxOutputTokens=28000){
@@ -53,6 +55,15 @@ FEATURE-WRITING STANDARD:
 - Category must be one of movies|tv|music|culture|independent|celebrity.
 - Image must be attributable to an official/credible source. If uncertain, leave image fields blank.
 
+VIDEO-FIRST ARTICLE STANDARD:
+- If the editor asks about a specific interview, speech, performance, trailer, clip or video, find the ORIGINAL or most authoritative publicly embeddable video whenever possible.
+- Prefer the official YouTube upload from the subject, interviewer, broadcaster, studio, label, network or rights holder. A direct MP4/WebM source is also acceptable when it is clearly authorized/public.
+- Do NOT download, copy or rehost third-party video. Indie Cut should embed the provider-hosted video.
+- Put the playable URL in lead_video_url and the canonical page/original upload URL in lead_video_source_url.
+- The video should support the article, not replace it. Write a complete article explaining what was said, why it matters and the relevant context.
+- Never claim the video says something unless you can verify that from the video, an official transcript, captions, direct reporting or another reliable source.
+- If the correct video cannot be confidently identified or cannot be embedded, leave both video fields blank rather than guessing.
+
 FACT-CHECK STANDARD:
 - Prefer first-party/primary sources, official announcements, public records and direct interviews. Use reputable trades, regional outlets or specialist outlets as corroboration.
 - Two URLs from the same copied press release do not count as independent corroboration.
@@ -65,7 +76,7 @@ ${directAssignment?`For this direct assignment, return at least ONE polished art
 FIRST-PASS RESEARCH PACKAGE:
 ${JSON.stringify(draft)}
 
-Return ONLY valid JSON in this exact shape: {"stories":[{"headline":"","subheadline":"","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","body":"reader-facing polished article only","sources":["https://...","https://..."],"featured_image_url":"","featured_image_source_url":"","verification_status":"verified|not_verified","verification_note":"internal editor-only fact-check note","why_now":"one sentence explaining the angle","news_score":0}]}.`;
+Return ONLY valid JSON in this exact shape: {"stories":[{"headline":"","subheadline":"","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","body":"reader-facing polished article only","sources":["https://...","https://..."],"featured_image_url":"","featured_image_source_url":"","lead_video_url":"","lead_video_source_url":"","verification_status":"verified|not_verified","verification_note":"internal editor-only fact-check note","why_now":"one sentence explaining the angle","news_score":0}]}.`;
  try{return parseJson(await callResearchModel(apiKey,prompt,30000))}catch{return draft}
 }
 
@@ -99,6 +110,15 @@ RESEARCH RULES:
 - For a direct editor assignment, one credible source is enough to RETURN A DRAFT, but mark it not_verified/pending if corroboration is insufficient.
 - Never invent missing facts.
 
+VIDEO / INTERVIEW ASSIGNMENTS:
+- If the assignment asks about a video, interview, speech, performance, trailer or clip, actively search for the original/authoritative public video in addition to researching the story.
+- Prefer official YouTube uploads from the interviewer, broadcaster, network, studio, artist, label, subject or rights holder. Use a direct authorized MP4/WebM only when appropriate.
+- Do not download or rehost third-party video. Return the provider-hosted video so Indie Cut can embed it.
+- Return lead_video_url as the playable YouTube/watch URL or direct video URL, and lead_video_source_url as the original/canonical page URL. If the source URL and playable URL are the same, repeat it in both fields.
+- Do not use random reposts, fan mirrors, reaction videos or compilations when an original source exists.
+- If you cannot confidently identify the correct embeddable video, leave the video fields blank.
+- The finished story must still be a complete article. Summarize and contextualize the interview/video rather than merely announcing that a video exists.
+
 WRITING RULES:
 - The final deliverable is an ARTICLE, not a research report.
 - Research silently. Do not narrate the verification process to the reader.
@@ -110,14 +130,14 @@ WRITING RULES:
 - Avoid phrases such as "no reliable source located," "does not establish," "not proof," "cannot be confirmed," or "for this review" in the body unless absolutely necessary to the public story.
 - Avoid AI clichés such as "marks a significant", "continues to make waves", "in a move that", "underscores", "a testament to", "fans are buzzing", "has taken the world by storm", "as the industry evolves", and generic wrap-up paragraphs.
 - Body should normally be 5-8 substantial paragraphs, 450-800 words when enough material exists.
-- Reader-facing headline, subheadline and body must contain NO URLs, hyperlinks, Markdown links, citation markers, footnotes, bracket citations or source-domain parentheticals. Research links belong ONLY in sources.
+- Reader-facing headline, subheadline and body must contain NO URLs, hyperlinks, Markdown links, citation markers, footnotes, bracket citations, source-domain parentheticals. Research links belong ONLY in sources.
 
 Avoid duplicating or merely reframing these existing Indie Cut stories: ${existing||'none yet'}. For direct assignments, reject only an exact or materially identical existing angle; a genuinely new profile or feature is allowed.
 
 IMAGE RULES:
-Locate one strong editorial image when possible. For artist assignments, official artist/label/management press imagery and images from the artist's verified official channels are acceptable when attributable. Do not use random fan reposts, search-result thumbnails, watermarked stock images or unattributable images. If uncertain, leave image fields blank.
+Locate one strong editorial image when possible. For artist assignments, official artist/label/management press imagery and images from the artist's verified official channels are acceptable when attributable. Do not use random fan reposts, search-result thumbnails, watermarked stock images or unattributable images. If uncertain, leave image fields blank. A lead video does NOT replace the featured image; keep a useful featured image for homepage cards and social sharing whenever possible.
 
-Return ONLY valid JSON: {"stories":[{"headline":"","subheadline":"","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","body":"publication-ready reader-facing article","sources":["https://...","https://..."],"featured_image_url":"https://direct-image-or-source-hosted-image...","featured_image_source_url":"https://page-that-published-or-owns-image...","verification_status":"verified|not_verified","verification_note":"internal editor-only fact-check note","why_now":"one sentence story angle","news_score":0}]}.`;
+Return ONLY valid JSON: {"stories":[{"headline":"","subheadline":"","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","body":"publication-ready reader-facing article","sources":["https://...","https://..."],"featured_image_url":"https://direct-image-or-source-hosted-image...","featured_image_source_url":"https://page-that-published-or-owns-image...","lead_video_url":"https://youtube.com/watch?v=... or direct authorized video URL","lead_video_source_url":"https://original video page...","verification_status":"verified|not_verified","verification_note":"internal editor-only fact-check note","why_now":"one sentence story angle","news_score":0}]}.`;
  let firstPass:any;
  try{firstPass=parseJson(await callResearchModel(apiKey,prompt,30000))}catch(e:any){return NextResponse.json({error:e?.message||'The research model returned invalid JSON.'},{status:502})}
  const parsed=await runEditorialPass(apiKey,topic,firstPass,count,directAssignment);
@@ -130,9 +150,12 @@ Return ONLY valid JSON: {"stories":[{"headline":"","subheadline":"","category":"
    :(existingRows||[]).find((x:any)=>cleanSlug(x.slug||x.headline)===slug||String(x.headline||'').trim().toLowerCase()===headline.toLowerCase()||titleSimilarity(String(x.headline||''),headline)>=0.72);
   const duplicate=Boolean(nearDuplicate)||created.some((x:any)=>x.slug===slug||(!directAssignment&&titleSimilarity(x.headline,headline)>=0.72));if(duplicate){rejected.push({headline,reason:'Duplicate or near-duplicate of existing coverage'});continue}
   const sources=Array.isArray(s?.sources)?s.sources.map((x:any)=>String(x).trim()).filter((x:string)=>/^https?:\/\//i.test(x)):[];
-  const imageUrl=/^https?:\/\//i.test(String(s?.featured_image_url||''))?String(s.featured_image_url).trim():'';
-  const imageSource=/^https?:\/\//i.test(String(s?.featured_image_source_url||''))?String(s.featured_image_source_url).trim():'';
+  const imageUrl=validUrl(s?.featured_image_url);
+  const imageSource=validUrl(s?.featured_image_source_url);
+  const leadVideoUrl=embeddableLeadVideo(s?.lead_video_url);
+  const leadVideoSource=validUrl(s?.lead_video_source_url)||leadVideoUrl;
   if(imageSource&&!sources.includes(imageSource))sources.push(imageSource);
+  if(leadVideoSource&&!sources.includes(leadVideoSource))sources.push(leadVideoSource);
   const diverseSources=sourceHosts(sources);
   const fullyVerified=String(s?.verification_status||'').toLowerCase()==='verified'&&(config.require_multiple_sources===false||(sources.length>=2&&diverseSources>=2));
   if(sources.length===0){rejected.push({headline,reason:s?.verification_note||'No supportable public source was found for the requested draft'});continue}
@@ -141,9 +164,9 @@ Return ONLY valid JSON: {"stories":[{"headline":"","subheadline":"","category":"
   const body=cleanArticleBody(s?.body);
   const minimumBodyLength=directAssignment?400:700;
   if(body.length<minimumBodyLength){rejected.push({headline,reason:directAssignment?'Draft did not contain enough supportable material yet':'Draft was too thin to meet Indie Cut editorial depth standards'});continue}
-  const payload={headline,slug,subheadline:String(s?.subheadline||'').trim()||null,category:String(s?.category||'culture').trim().toLowerCase(),subject_name:String(s?.subject_name||'').trim()||null,body,featured_media_url:imageUrl||null,sources,verification_status:verificationStatus,status:'draft',published_at:null};
+  const payload={headline,slug,subheadline:String(s?.subheadline||'').trim()||null,category:String(s?.category||'culture').trim().toLowerCase(),subject_name:String(s?.subject_name||'').trim()||null,body,featured_media_url:imageUrl||null,lead_video_url:leadVideoUrl||null,lead_video_source_url:leadVideoUrl?(leadVideoSource||null):null,sources,verification_status:verificationStatus,status:'draft',published_at:null};
   const {error}=await supabase.from('articles').insert(payload);if(error){rejected.push({headline,reason:error.message});continue}
-  created.push({headline,slug,category:payload.category,sources:sources.length,source_hosts:diverseSources,image:imageUrl||null,image_source:imageSource||null,verification_status:verificationStatus,verification_note:note,why_now:String(s?.why_now||''),news_score:Number(s?.news_score||0)});
+  created.push({headline,slug,category:payload.category,sources:sources.length,source_hosts:diverseSources,image:imageUrl||null,image_source:imageSource||null,lead_video:leadVideoUrl||null,lead_video_source:leadVideoSource||null,verification_status:verificationStatus,verification_note:note,why_now:String(s?.why_now||''),news_score:Number(s?.news_score||0)});
  }
- return NextResponse.json({requested:count,created,rejected,mode:directAssignment?'direct_assignment':'discovery',editorial_pipeline:'research + feature rewrite + internal fact-check'});
+ return NextResponse.json({requested:count,created,rejected,mode:directAssignment?'direct_assignment':'discovery',editorial_pipeline:'research + feature rewrite + internal fact-check + optional lead video'});
 }
