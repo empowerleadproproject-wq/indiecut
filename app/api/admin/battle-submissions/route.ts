@@ -3,6 +3,7 @@ import {createClient as createServiceClient} from '@supabase/supabase-js';
 import {createClient} from '../../../../lib/supabase/server';
 import {isAdminEmail} from '../../../../lib/admin';
 import {slugify} from '../../../../lib/battles';
+import {enrollWorkflowsForEvent} from '../../../../lib/crm-workflow-events';
 
 async function adminDb(){
  const auth=createClient();const {data:{user}}=await auth.auth.getUser();if(!user||!isAdminEmail(user.email))return {error:NextResponse.json({error:'Unauthorized'},{status:401})};
@@ -13,6 +14,7 @@ async function readSubmissions(db:any){const {data}=await db.from('site_settings
 async function writeSubmissions(db:any,rows:any[]){return db.from('site_settings').upsert({setting_key:'battle_submissions',setting_value:JSON.stringify(rows),updated_at:new Date().toISOString()},{onConflict:'setting_key'})}
 async function publicRows(db:any){const rows:any[]=await readSubmissions(db);return rows.map(({ip_hash,...rest}:any)=>rest)}
 async function contests(db:any){const {data}=await db.from('battle_contests').select('id,title,slug,status,genre,qualifying_starts_at,qualifying_ends_at').neq('status','completed').order('created_at',{ascending:false});return data||[]}
+async function findCrmContact(db:any,item:any){const email=String(item?.email||'').trim().toLowerCase();if(email){const {data}=await db.from('crm_contacts').select('id').eq('email',email).maybeSingle();if(data)return data}const phone=String(item?.phone||'').trim();if(phone){const {data}=await db.from('crm_contacts').select('id').eq('phone',phone).maybeSingle();if(data)return data}return null}
 
 export async function GET(){const a=await adminDb();if(a.error)return a.error;const db=a.db!;return NextResponse.json({submissions:await publicRows(db),contests:await contests(db)})}
 
@@ -27,7 +29,9 @@ export async function POST(request:Request){
   let base=slugify(item.artist_name)||'artist';let slug=base;let n=2;while(true){const {data}=await db.from('battle_entries').select('id').eq('contest_id',contestId).eq('slug',slug).maybeSingle();if(!data)break;slug=`${base}-${n++}`}
   const {data:entry,error}=await db.from('battle_entries').insert({contest_id:contestId,artist_name:item.artist_name,slug,genre:item.genre,city:item.city||null,bio:item.bio||null,image_url:item.image_url||null,track_title:item.track_title||null,track_url:item.track_url||null,track_cover_url:item.image_url||null,instagram_url:item.instagram_url||null,tiktok_url:item.tiktok_url||null,active:true}).select('id,slug').single();if(error)return NextResponse.json({error:error.message},{status:400});
   const fan_path=`/battles/${contest.slug}/artists/${entry.slug}`;
-  rows[index]={...item,status:'approved',approved_to_contest_id:contestId,approved_to_contest_title:contest.title,battle_entry_id:entry.id,fan_path,updated_at:new Date().toISOString()};const {error:saveError}=await writeSubmissions(db,rows);if(saveError)return NextResponse.json({error:saveError.message},{status:400});return NextResponse.json({ok:true,submissions:await publicRows(db),contests:await contests(db),entry:{...entry,fan_path}});
+  rows[index]={...item,status:'approved',approved_to_contest_id:contestId,approved_to_contest_title:contest.title,battle_entry_id:entry.id,fan_path,updated_at:new Date().toISOString()};const {error:saveError}=await writeSubmissions(db,rows);if(saveError)return NextResponse.json({error:saveError.message},{status:400});
+  try{const crmContact=await findCrmContact(db,item);if(crmContact?.id)await enrollWorkflowsForEvent(db,'battle_submission_approved',crmContact.id,{submissionId:item.id,contestId,contestTitle:contest.title,genre:item.genre,fan_path});}catch{}
+  return NextResponse.json({ok:true,submissions:await publicRows(db),contests:await contests(db),entry:{...entry,fan_path}});
  }
  if(action==='update_photo'){
   const imageUrl=String(body.image_url||'').trim();if(item.status!=='approved'||!item.battle_entry_id)return NextResponse.json({error:'Approve this artist before editing the live profile.'},{status:400});if(!imageUrl)return NextResponse.json({error:'Upload a profile image first.'},{status:400});
