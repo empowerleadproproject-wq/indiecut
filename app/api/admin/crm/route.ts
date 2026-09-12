@@ -2,6 +2,7 @@ import {NextResponse} from 'next/server';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
 import {createClient} from '../../../../lib/supabase/server';
 import {isAdminEmail} from '../../../../lib/admin';
+import {enrollMatchingWorkflows} from '../../../../lib/crm-workflows';
 
 export const dynamic='force-dynamic';
 
@@ -18,6 +19,7 @@ async function adminDb(){
 }
 function cleanTags(value:any){return Array.from(new Set((Array.isArray(value)?value:String(value||'').split(',')).map((x:any)=>String(x).trim()).filter(Boolean))).slice(0,30)}
 function ids(value:any){return Array.from(new Set((Array.isArray(value)?value:[]).map((x:any)=>String(x)).filter(Boolean))).slice(0,500)}
+function addedTags(before:any,after:any){const old=new Set(cleanTags(before).map((x:any)=>String(x).toLowerCase()));return cleanTags(after).filter((x:any)=>!old.has(String(x).toLowerCase()))}
 
 async function snapshot(db:any){
  const [{data:contacts},{data:templates},{data:campaigns},{data:activity},{data:smartLists},{data:tasks},{data:opportunities},{count:queued},{count:sent},{count:failed}]=await Promise.all([
@@ -55,18 +57,38 @@ export async function POST(request:Request){
  try{
   if(action==='save_contact'){
    const p=body.contact||{};const email=String(p.email||'').trim().toLowerCase()||null;const payload:any={artist_name:String(p.artist_name||'').trim()||null,full_name:String(p.full_name||'').trim()||null,email,phone:String(p.phone||'').trim()||null,genre:String(p.genre||'').trim()||null,city:String(p.city||'').trim()||null,social_handle:String(p.social_handle||'').trim()||null,source:String(p.source||'manual').trim()||'manual',status:String(p.status||'lead').trim()||'lead',tags:cleanTags(p.tags),notes:String(p.notes||'').trim()||null,email_opt_in:Boolean(p.email_opt_in),sms_opt_in:Boolean(p.sms_opt_in),updated_at:new Date().toISOString()};
-   let contactId=String(p.id||'');
-   if(contactId){const {error}=await db.from('crm_contacts').update(payload).eq('id',contactId);if(error)throw error;}
-   else{let existing:any=null;if(email){const q=await db.from('crm_contacts').select('id').eq('email',email).maybeSingle();existing=q.data}if(existing){contactId=existing.id;const {error}=await db.from('crm_contacts').update(payload).eq('id',existing.id);if(error)throw error;}else{const {data:newRow,error}=await db.from('crm_contacts').insert(payload).select('id').single();if(error)throw error;contactId=newRow.id;}}
-   if(contactId)await db.from('crm_activity').insert({contact_id:contactId,activity_type:'contact_updated',detail:p.id?'Contact updated':'Contact created'});
+   let contactId=String(p.id||''),before:any=null,wasCreated=false;
+   if(contactId){const q=await db.from('crm_contacts').select('id,status,tags').eq('id',contactId).maybeSingle();before=q.data;const {error}=await db.from('crm_contacts').update(payload).eq('id',contactId);if(error)throw error;}
+   else{
+    let existing:any=null;if(email){const q=await db.from('crm_contacts').select('id,status,tags').eq('email',email).maybeSingle();existing=q.data}
+    if(existing){contactId=existing.id;before=existing;const {error}=await db.from('crm_contacts').update(payload).eq('id',existing.id);if(error)throw error;}
+    else{const {data:newRow,error}=await db.from('crm_contacts').insert(payload).select('id').single();if(error)throw error;contactId=newRow.id;wasCreated=true;}
+   }
+   if(contactId){
+    await db.from('crm_activity').insert({contact_id:contactId,activity_type:wasCreated?'contact_created':'contact_updated',detail:wasCreated?'Contact created':'Contact updated'});
+    if(wasCreated){
+     await enrollMatchingWorkflows(db,contactId,'contact_created',{});
+     for(const tag of payload.tags||[])await enrollMatchingWorkflows(db,contactId,'tag_added',{tag});
+    }else{
+     if(before&&String(before.status||'')!==String(payload.status||''))await enrollMatchingWorkflows(db,contactId,'status_changed',{status:payload.status,previousStatus:before.status});
+     for(const tag of addedTags(before?.tags,payload.tags))await enrollMatchingWorkflows(db,contactId,'tag_added',{tag});
+    }
+   }
   }else if(action==='delete_contact'){
    const {error}=await db.from('crm_contacts').delete().eq('id',String(body.contactId||''));if(error)throw error;
   }else if(action==='bulk_delete_contacts'){
    const contactIds=ids(body.contactIds);if(!contactIds.length)return NextResponse.json({error:'Select at least one contact.'},{status:400});const {error}=await db.from('crm_contacts').delete().in('id',contactIds);if(error)throw error;
   }else if(action==='bulk_update_contacts'){
-   const contactIds=ids(body.contactIds);if(!contactIds.length)return NextResponse.json({error:'Select at least one contact.'},{status:400});const patch:any={updated_at:new Date().toISOString()};if(body.status)patch.status=String(body.status);if(body.email_opt_in!==undefined)patch.email_opt_in=Boolean(body.email_opt_in);if(body.sms_opt_in!==undefined)patch.sms_opt_in=Boolean(body.sms_opt_in);
-   if(body.addTag){const {data:rows,error:e1}=await db.from('crm_contacts').select('id,tags').in('id',contactIds);if(e1)throw e1;for(const row of rows||[]){const tags=cleanTags([...(row.tags||[]),String(body.addTag)]);const {error}=await db.from('crm_contacts').update({...patch,tags}).eq('id',row.id);if(error)throw error;}}
-   else{const {error}=await db.from('crm_contacts').update(patch).in('id',contactIds);if(error)throw error;}
+   const contactIds=ids(body.contactIds);if(!contactIds.length)return NextResponse.json({error:'Select at least one contact.'},{status:400});
+   const {data:beforeRows,error:beforeErr}=await db.from('crm_contacts').select('id,status,tags').in('id',contactIds);if(beforeErr)throw beforeErr;
+   const patch:any={updated_at:new Date().toISOString()};if(body.status)patch.status=String(body.status);if(body.email_opt_in!==undefined)patch.email_opt_in=Boolean(body.email_opt_in);if(body.sms_opt_in!==undefined)patch.sms_opt_in=Boolean(body.sms_opt_in);
+   if(body.addTag){
+    const tag=String(body.addTag).trim();
+    for(const row of beforeRows||[]){const tags=cleanTags([...(row.tags||[]),tag]);const {error}=await db.from('crm_contacts').update({...patch,tags}).eq('id',row.id);if(error)throw error;if(tag&&!cleanTags(row.tags).some((x:any)=>String(x).toLowerCase()===tag.toLowerCase()))await enrollMatchingWorkflows(db,row.id,'tag_added',{tag});if(patch.status&&String(row.status||'')!==String(patch.status))await enrollMatchingWorkflows(db,row.id,'status_changed',{status:patch.status,previousStatus:row.status});}
+   }else{
+    const {error}=await db.from('crm_contacts').update(patch).in('id',contactIds);if(error)throw error;
+    if(patch.status)for(const row of beforeRows||[])if(String(row.status||'')!==String(patch.status))await enrollMatchingWorkflows(db,row.id,'status_changed',{status:patch.status,previousStatus:row.status});
+   }
   }else if(action==='add_note'){
    const contactId=String(body.contactId||''),detail=String(body.detail||'').trim();if(!contactId||!detail)return NextResponse.json({error:'Contact and note are required.'},{status:400});
    const {error}=await db.from('crm_activity').insert({contact_id:contactId,activity_type:'note',detail});if(error)throw error;
