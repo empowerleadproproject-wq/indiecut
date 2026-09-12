@@ -1,15 +1,23 @@
 export type WorkflowEventType=string;
 
 function sameText(a:any,b:any){return String(a??'').trim().toLowerCase()===String(b??'').trim().toLowerCase()}
+function includesText(a:any,b:any){return String(a??'').toLowerCase().includes(String(b??'').trim().toLowerCase())}
 function matchesTrigger(workflow:any,eventType:WorkflowEventType,payload:any){
  if(workflow?.status!=='published'||workflow?.trigger_type!==eventType)return false;
  const cfg=workflow.trigger_config&&typeof workflow.trigger_config==='object'?workflow.trigger_config:{};
- if(eventType==='status_changed')return !cfg.status||sameText(cfg.status,payload?.status);
- if(eventType==='tag_added'||eventType==='tag_removed')return !cfg.tag||sameText(cfg.tag,payload?.tag);
- if(eventType==='sms_reply'||eventType==='email_reply')return !cfg.keyword||String(payload?.message||'').toLowerCase().includes(String(cfg.keyword).trim().toLowerCase());
- if(eventType==='contact_updated')return !cfg.field||sameText(cfg.field,payload?.field);
- if(eventType==='email_opt_in_changed'||eventType==='sms_opt_in_changed')return cfg.value===undefined||sameText(String(cfg.value),String(payload?.value));
- if(eventType==='vote_received'&&cfg.min_votes)return Number(payload?.vote_count||0)>=Number(cfg.min_votes);
+ if(cfg.status&&!sameText(cfg.status,payload?.status))return false;
+ if(cfg.previous_status&&!sameText(cfg.previous_status,payload?.previous_status||payload?.previousStatus))return false;
+ if(cfg.tag&&!sameText(cfg.tag,payload?.tag))return false;
+ if(cfg.keyword&&!includesText(payload?.message||payload?.text||payload?.body,cfg.keyword))return false;
+ if(cfg.field&&!sameText(cfg.field,payload?.field))return false;
+ if(cfg.value!==undefined&&cfg.value!==''&&!sameText(String(cfg.value),String(payload?.value)))return false;
+ if(cfg.genre&&!sameText(cfg.genre,payload?.genre))return false;
+ if(cfg.source&&!sameText(cfg.source,payload?.source))return false;
+ if(cfg.object_type&&!sameText(cfg.object_type,payload?.object_type))return false;
+ if(cfg.min_votes&&Number(payload?.vote_count||payload?.votes||0)<Number(cfg.min_votes))return false;
+ if(cfg.min_amount&&Number(payload?.amount||0)<Number(cfg.min_amount))return false;
+ if(cfg.stage&&!sameText(cfg.stage,payload?.stage||payload?.pipeline_stage))return false;
+ if(cfg.event_name&&!sameText(cfg.event_name,payload?.event_name||payload?.name))return false;
  return true;
 }
 
