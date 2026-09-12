@@ -96,10 +96,24 @@ create table if not exists public.battle_votes (
   created_at timestamptz not null default now()
 );
 
-create unique index if not exists battle_votes_one_network_per_scope
-  on public.battle_votes(contest_id,vote_scope,ip_hash);
-create unique index if not exists battle_votes_one_device_per_scope
-  on public.battle_votes(contest_id,vote_scope,device_hash);
+-- During Phase One/qualifying, a fan may support multiple artists, but only once per artist.
+drop index if exists public.battle_votes_one_network_per_scope;
+drop index if exists public.battle_votes_one_device_per_scope;
+create unique index if not exists battle_votes_one_network_per_artist_qualifying
+  on public.battle_votes(contest_id,vote_scope,entry_id,ip_hash)
+  where vote_scope='qualifying';
+create unique index if not exists battle_votes_one_device_per_artist_qualifying
+  on public.battle_votes(contest_id,vote_scope,entry_id,device_hash)
+  where vote_scope='qualifying';
+
+-- During a live head-to-head round, keep one vote total per fan for that round.
+create unique index if not exists battle_votes_one_network_per_round
+  on public.battle_votes(contest_id,vote_scope,ip_hash)
+  where vote_scope like 'round:%';
+create unique index if not exists battle_votes_one_device_per_round
+  on public.battle_votes(contest_id,vote_scope,device_hash)
+  where vote_scope like 'round:%';
+
 create index if not exists battle_votes_entry_idx on public.battle_votes(entry_id);
 create index if not exists battle_votes_round_idx on public.battle_votes(round_id);
 create index if not exists battle_entries_contest_idx on public.battle_entries(contest_id);
