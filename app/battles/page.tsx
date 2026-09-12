@@ -32,7 +32,7 @@ async function landingData(){
 
 export default async function BattlesLandingPage(){
  const content=await landingData();
- return <main className={styles.landingPage} style={{background:'#050606'}}><PublicHeader/><div className={styles.landingShell} style={{width:'100%',maxWidth:'none',margin:0,padding:0}}>
+ return <main className={styles.landingPage} style={{background:'#050606'}}><PublicHeader/><div className={styles.landingShell} style={{width:'100%',maxWidth:'none',margin:0,padding:'0 32px 32px',boxSizing:'border-box'}}>
   <section className={styles.landingHero} style={{minHeight:'calc(100vh - 160px)',width:'100%',boxShadow:'none'}}>
    <div className={styles.landingMediaLayer}>{content.images.slice(0,7).map((src:string,i:number)=><div key={`${src}-${i}`} className={`${styles.floatingImage} ${styles[`float${i+1}` as keyof typeof styles]||''}`}><img src={src} alt=""/></div>)}</div>
    <div className={styles.landingCenter}>
