@@ -22,6 +22,7 @@ const modules=[
  {slug:'advertising',label:'Advertising',description:'Upload image or video ads, set placements, links, schedules and active campaigns.'},
  {slug:'authors',label:'Authors & Editors',description:'Manage bylines, headshots, bios and editorial identities.'},
  {slug:'analytics',label:'Analytics',description:'Track publication activity and content performance.'},
+ {slug:'tracking-pixels',label:'Tracking & Pixels',description:'Connect Meta Pixel, GA4, Google Ads, TikTok Pixel and Google Tag Manager for retargeting and conversions.'},
  {slug:'media-library',label:'Media Library',description:'Central library for editorial images, video, covers, logos and ad creative.'},
  {slug:'subscribers',label:'Email Subscribers',description:'Manage Indie Cut audience and newsletter subscribers.'},
  {slug:'settings',label:'Site Settings',description:'Control publication name, tagline, navigation, social links and global options.'},
