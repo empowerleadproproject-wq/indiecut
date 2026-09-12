@@ -10,7 +10,7 @@ const DEFAULTS={enabled:true,default_topic:'trending entertainment stories invol
 function cleanSlug(value:string){return String(value||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')}
 function textFromResponse(json:any){if(typeof json?.output_text==='string')return json.output_text;const parts:string[]=[];for(const item of json?.output||[]){for(const c of item?.content||[]){if(typeof c?.text==='string')parts.push(c.text)}}return parts.join('\n')}
 function parseJson(text:string){return JSON.parse(String(text||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim())}
-function cleanArticleBody(v:any){return String(v||'').replace(/\s*\(\[[^\]]+\]\(https?:\/\/[^)]+\)\)/gi,'').replace(/\s*\[[^\]]+\]\(https?:\/\/[^)]+\)/gi,'').replace(/\s*\(https?:\/\/[^)]+\)/gi,'').trim()}
+function cleanArticleBody(v:any){return String(v||'').replace(/\s*\(\[[^\]]+\]\(https?:\/\/[^)]+\)\)/gi,'').replace(/\s*\[[^\]]+\]\(https?:\/\/[^)]+\)/gi,'').replace(/\s*\(https?:\/\/[^)]+\)/gi,'').replace(/\n\s*EDITORIAL VERIFICATION NOTE:[\s\S]*$/i,'').trim()}
 function titleWords(v:string){return new Set(String(v||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>2&&!['the','and','for','with','from','that','this','into','over','after','before'].includes(w)))}
 function titleSimilarity(a:string,b:string){const x=titleWords(a),y=titleWords(b);if(!x.size||!y.size)return 0;let hit=0;for(const w of x)if(y.has(w))hit++;return hit/Math.max(x.size,y.size)}
 function sourceHosts(urls:string[]){const hosts=new Set<string>();for(const u of urls){try{hosts.add(new URL(u).hostname.replace(/^www\./,''))}catch{}}return hosts.size}
@@ -26,33 +26,46 @@ async function callResearchModel(apiKey:string,prompt:string,maxOutputTokens=280
 
 async function runEditorialPass(apiKey:string,topic:string,draft:any,count:number,directAssignment:boolean){
  const assignmentRule=directAssignment?`\nDIRECT EDITOR ASSIGNMENT: The editor explicitly requested this subject. You MUST preserve that assignment. Do not substitute a different celebrity, artist, movie, trend or supposedly bigger story. If the subject is niche or independent, that is acceptable and often desirable for Indie Cut. Search deeply for that exact subject, including spelling variants and aliases. Use official artist/label/management pages, verified social profiles, YouTube channels, Bandcamp, Spotify/Apple Music artist pages, interviews, venue/festival pages, regional outlets and credible independent-music coverage when useful. A lack of national press is NOT a reason to abandon the story. If only one credible source is available, return the draft as not_verified with a clear verification_note rather than dropping the assignment.`:'';
- const prompt=`You are Indie Cut's senior standards editor, fact-checker and rewrite desk. Today is ${todayLabel()}.
+ const prompt=`You are Indie Cut's senior entertainment features editor. Today is ${todayLabel()}.
 
 Assignment: ${topic}${assignmentRule}
 
-Below is a first-pass research package. Perform a SECOND independent editorial pass using live web search. Do not merely polish the prose. Re-check the central claim, names, dates, titles, numbers, release information, awards, legal claims and quotes against current credible sources. Look for contradictions, stale reporting, recycled news, missing context and misleading framing. If a claim cannot be supported, remove or qualify that claim; for a direct editor assignment, do not discard the entire requested subject merely because it is niche.
+Below is a first-pass research package. Your job is to TURN THE RESEARCH INTO A STRONG READER-FACING ARTICLE. Research is support material, not the article itself. Use live web search to quietly verify names, dates, titles, numbers, releases, awards, legal claims and quotes before you write.
 
-EDITORIAL STANDARD:
-- Prefer first-party/primary sources, official announcements, public records and direct interviews. Use reputable trades or major newsrooms as corroboration.
-- Two URLs from the same copied press release do not count as independent corroboration. Use source diversity when possible.
-- Separate confirmed facts from analysis. Never invent motives, reactions, relationships, quotes, dates, numbers, casting or controversy.
-- For breaking-news discovery, identify the actual news peg: what happened, what is new today, and why a reader should care now.
-- For an editor-requested artist/profile/feature assignment, the valid angle can be the artist's career, sound, current release, regional impact, live activity, catalog or independent rise; it does NOT have to be a national breaking-news event.
-- Headlines must be specific, accurate and natural, not clickbait, vague, promotional or stuffed with adjectives.
-- Lead paragraph must deliver the angle immediately. Do not start with throat-clearing or generic context.
-- Write like a sharp human entertainment editor. Vary sentence length. Avoid canned AI phrases such as "marks a significant", "continues to make waves", "in a move that", "underscores", "a testament to", "as the industry evolves", "fans are buzzing", "has taken the world by storm", or empty conclusions.
-- Keep each story focused on one clear angle. Add useful context only when it changes how the story is understood.
+CRITICAL SEPARATION OF DUTIES:
+- The BODY is for readers. It must read like a polished entertainment magazine feature, profile, spotlight or news story.
+- verification_note is for the editor only. Put uncertainty, missing corroboration, source conflicts and fact-check warnings there.
+- NEVER place phrases such as "could not verify," "no reliable source located," "does not establish," "not proof," "cannot responsibly present," "for this review," or "EDITORIAL VERIFICATION NOTE" in the article body unless the uncertainty itself is truly the central public story.
+- Do not make the article a research memo, source audit, evidence report or disclaimer-heavy fact check.
+- If a claim is uncertain, omit it from the body or write only the verified portion. Keep the warning in verification_note.
+
+FEATURE-WRITING STANDARD:
+- For artist/profile assignments, tell the reader who the artist is, what the music sounds like, what they are releasing or building, who they collaborate with, where they fit in the scene, and why the story is interesting.
+- Build an engaging narrative from verified facts instead of listing database metadata.
+- A platform genre tag, DJ-pool listing, release date or catalog entry can support the story, but should not become the entire voice of the story.
+- Use context to explain why details matter. Write with momentum, transitions and a clear point of view grounded in facts.
+- Prefer a strong feature headline over a technical headline. Do not lead with disclaimers.
+- Lead paragraph should hook the reader and establish the angle immediately.
+- Write like a sharp human entertainment journalist. Vary sentence length. Avoid canned AI phrases such as "marks a significant", "continues to make waves", "in a move that", "underscores", "a testament to", "as the industry evolves", "fans are buzzing", "has taken the world by storm", and empty conclusions.
+- Keep one clear angle per story. Add useful context only when it improves the story.
 - Reader-facing headline, subheadline and body must contain NO URLs, hyperlinks, markdown citations, footnotes, bracket citations or source-domain parentheticals. URLs belong only in sources.
-- Body should be 4-7 substantial paragraphs and normally 350-700 words. A niche direct assignment may be somewhat shorter if verified public information is limited, but it must still read like a complete article.
+- Body should normally be 5-8 substantial paragraphs and 450-800 words. A niche direct assignment may be shorter if public information is limited, but it must still feel complete and publishable.
 - Category must be one of movies|tv|music|culture|independent|celebrity.
 - Image must be attributable to an official/credible source. If uncertain, leave image fields blank.
 
-${directAssignment?`For this direct assignment, return at least ONE story about the requested subject whenever there is enough public information to write a responsible draft. Do not rank the requested subject out of the package. Only reject the subject if there is effectively no supportable public information at all.`:`Score each candidate internally for TIMELINESS, NEWS VALUE, SOURCE QUALITY, ORIGINALITY and INDIE CUT FIT. Keep only the strongest ${count} or fewer. Near-duplicate angles should be merged or one rejected.`}
+FACT-CHECK STANDARD:
+- Prefer first-party/primary sources, official announcements, public records and direct interviews. Use reputable trades, regional outlets or specialist outlets as corroboration.
+- Two URLs from the same copied press release do not count as independent corroboration.
+- Never invent motives, reactions, relationships, quotes, dates, numbers, casting, awards, chart positions, biography or controversy.
+- For a direct artist/profile assignment, the valid angle can be the artist's career, sound, current release, regional impact, live activity, catalog or independent rise; it does NOT have to be a national breaking-news event.
+- If a historical identity connection is uncertain, do not build the article around it. Mention only what is verified and put the unresolved connection in verification_note.
 
-FIRST-PASS PACKAGE:
+${directAssignment?`For this direct assignment, return at least ONE polished article about the requested subject whenever there is enough public information to write responsibly. Do not rank the subject out of the package.`:`Score candidates internally for timeliness, news value, source quality, originality and Indie Cut fit. Keep only the strongest ${count} or fewer.`}
+
+FIRST-PASS RESEARCH PACKAGE:
 ${JSON.stringify(draft)}
 
-Return ONLY valid JSON in this exact shape: {"stories":[{"headline":"","subheadline":"","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","body":"","sources":["https://...","https://..."],"featured_image_url":"","featured_image_source_url":"","verification_status":"verified|not_verified","verification_note":"specific internal note","why_now":"one sentence explaining the angle","news_score":0}]}.`;
+Return ONLY valid JSON in this exact shape: {"stories":[{"headline":"","subheadline":"","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","body":"reader-facing polished article only","sources":["https://...","https://..."],"featured_image_url":"","featured_image_source_url":"","verification_status":"verified|not_verified","verification_note":"internal editor-only fact-check note","why_now":"one sentence explaining the angle","news_score":0}]}.`;
  try{return parseJson(await callResearchModel(apiKey,prompt,30000))}catch{return draft}
 }
 
@@ -77,33 +90,34 @@ ${directAssignment?`This is DIRECT ASSIGNMENT MODE. Research the requested subje
 
 Coverage includes movies, television, music, actors, musicians, filmmakers, comedians, creators, celebrity news, independent entertainment and culture. Give strong editorial attention to Black entertainment and African-American culture when relevant without forcing a race angle where it is not actually part of the story.
 
-VERIFICATION RULES:
+RESEARCH RULES:
 - NEVER use blind items, anonymous gossip, rumor aggregation, fabricated quotes, unverified relationship claims or unsupported controversy.
 - Social media CAN be used as a primary source for what a verified/official subject directly announced about themselves, but not as proof of third-party rumors or speculation.
 - Prefer primary sources: official statements, artists, labels, studios, networks, festivals, verified/direct interviews, public records, award organizations and direct announcements. Then use reputable entertainment trades, major newsrooms, regional media and credible specialist outlets.
 - Require at least two credible URLs for a fully verified story whenever possible, and prefer genuinely independent sources rather than duplicated syndication.
 - Cross-check names, dates, titles, release dates, awards, numbers, legal claims, deaths, health information and direct quotations.
-- If sources disagree, do not hide the conflict. Use the most authoritative/current source and explain the uncertainty in verification_note.
 - For a direct editor assignment, one credible source is enough to RETURN A DRAFT, but mark it not_verified/pending if corroboration is insufficient.
-- If the assignment contains first-party information, an exclusive or a fact the editor says can be confirmed directly with a named source, still draft only the supportable facts; flag unsupported portions in verification_note.
 - Never invent missing facts.
 
-EDITORIAL INTELLIGENCE:
-- In discovery mode, identify the real news peg and answer "why now?" before writing.
-- In direct assignment mode, honor the editor's requested subject even when the best format is a profile, artist spotlight, career feature or scene story rather than breaking news.
-- Avoid duplicating or merely reframing these existing Indie Cut stories: ${existing||'none yet'}.
-- For direct assignments, do not treat every article about the same person as a duplicate. Reject only an exact or materially identical existing angle/event; a genuinely new profile or angle is allowed.
-- Headlines should be specific and factual, not clickbait or press-release copy.
-- Lead with the story angle in the first paragraph. Do not open with generic biography filler.
-- Write original, sharp human entertainment journalism. Vary rhythm and sentence length. Avoid AI clichés such as "marks a significant", "continues to make waves", "in a move that", "underscores", "a testament to", "fans are buzzing", "has taken the world by storm", "as the industry evolves", and generic wrap-up paragraphs.
-- Keep one clear angle per story. Use context to deepen understanding, not pad length.
-- Body should be 4-7 substantial paragraphs, normally 350-700 words. For a niche direct assignment, a shorter complete feature is acceptable if public information is genuinely limited.
-- Reader-facing headline, subheadline and body must contain NO URLs, hyperlinks, Markdown links, citation markers, footnotes, bracket citations, source-domain parentheticals or strings like ([site.com](https://...)). Research links belong ONLY in sources.
+WRITING RULES:
+- The final deliverable is an ARTICLE, not a research report.
+- Research silently. Do not narrate the verification process to the reader.
+- Do not fill the body with caveats about what was not found. Put uncertainty in verification_note.
+- If a claim is uncertain, omit it from the body rather than making the whole article about the uncertainty.
+- For artist/profile assignments, tell a coherent story about the artist's music, releases, collaborations, sound, scene and career using the strongest verified material available.
+- Write original, sharp human entertainment journalism with a strong headline, hook, transitions and a satisfying close.
+- Lead with the feature angle, not metadata.
+- Avoid phrases such as "no reliable source located," "does not establish," "not proof," "cannot be confirmed," or "for this review" in the body unless absolutely necessary to the public story.
+- Avoid AI clichés such as "marks a significant", "continues to make waves", "in a move that", "underscores", "a testament to", "fans are buzzing", "has taken the world by storm", "as the industry evolves", and generic wrap-up paragraphs.
+- Body should normally be 5-8 substantial paragraphs, 450-800 words when enough material exists.
+- Reader-facing headline, subheadline and body must contain NO URLs, hyperlinks, Markdown links, citation markers, footnotes, bracket citations or source-domain parentheticals. Research links belong ONLY in sources.
+
+Avoid duplicating or merely reframing these existing Indie Cut stories: ${existing||'none yet'}. For direct assignments, reject only an exact or materially identical existing angle; a genuinely new profile or feature is allowed.
 
 IMAGE RULES:
 Locate one strong editorial image when possible. For artist assignments, official artist/label/management press imagery and images from the artist's verified official channels are acceptable when attributable. Do not use random fan reposts, search-result thumbnails, watermarked stock images or unattributable images. If uncertain, leave image fields blank.
 
-Return ONLY valid JSON: {"stories":[{"headline":"","subheadline":"","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","body":"4-7 substantial paragraphs","sources":["https://...","https://..."],"featured_image_url":"https://direct-image-or-source-hosted-image...","featured_image_source_url":"https://page-that-published-or-owns-image...","verification_status":"verified|not_verified","verification_note":"specific internal explanation","why_now":"one sentence story angle","news_score":0}]}.`;
+Return ONLY valid JSON: {"stories":[{"headline":"","subheadline":"","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","body":"publication-ready reader-facing article","sources":["https://...","https://..."],"featured_image_url":"https://direct-image-or-source-hosted-image...","featured_image_source_url":"https://page-that-published-or-owns-image...","verification_status":"verified|not_verified","verification_note":"internal editor-only fact-check note","why_now":"one sentence story angle","news_score":0}]}.`;
  let firstPass:any;
  try{firstPass=parseJson(await callResearchModel(apiKey,prompt,30000))}catch(e:any){return NextResponse.json({error:e?.message||'The research model returned invalid JSON.'},{status:502})}
  const parsed=await runEditorialPass(apiKey,topic,firstPass,count,directAssignment);
@@ -127,10 +141,9 @@ Return ONLY valid JSON: {"stories":[{"headline":"","subheadline":"","category":"
   const body=cleanArticleBody(s?.body);
   const minimumBodyLength=directAssignment?400:700;
   if(body.length<minimumBodyLength){rejected.push({headline,reason:directAssignment?'Draft did not contain enough supportable material yet':'Draft was too thin to meet Indie Cut editorial depth standards'});continue}
-  const bodyWithNote=!fullyVerified&&note?`${body}\n\nEDITORIAL VERIFICATION NOTE: ${note}`:body;
-  const payload={headline,slug,subheadline:String(s?.subheadline||'').trim()||null,category:String(s?.category||'culture').trim().toLowerCase(),subject_name:String(s?.subject_name||'').trim()||null,body:bodyWithNote,featured_media_url:imageUrl||null,sources,verification_status:verificationStatus,status:'draft',published_at:null};
+  const payload={headline,slug,subheadline:String(s?.subheadline||'').trim()||null,category:String(s?.category||'culture').trim().toLowerCase(),subject_name:String(s?.subject_name||'').trim()||null,body,featured_media_url:imageUrl||null,sources,verification_status:verificationStatus,status:'draft',published_at:null};
   const {error}=await supabase.from('articles').insert(payload);if(error){rejected.push({headline,reason:error.message});continue}
   created.push({headline,slug,category:payload.category,sources:sources.length,source_hosts:diverseSources,image:imageUrl||null,image_source:imageSource||null,verification_status:verificationStatus,verification_note:note,why_now:String(s?.why_now||''),news_score:Number(s?.news_score||0)});
  }
- return NextResponse.json({requested:count,created,rejected,mode:directAssignment?'direct_assignment':'discovery',editorial_pipeline:'two-pass research + standards review'});
+ return NextResponse.json({requested:count,created,rejected,mode:directAssignment?'direct_assignment':'discovery',editorial_pipeline:'research + feature rewrite + internal fact-check'});
 }
