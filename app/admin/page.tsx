@@ -10,6 +10,7 @@ const modules=[
  {slug:'artists',label:'Artists & People',description:'Manage actors, musicians, filmmakers, creators and emerging talent profiles.'},
  {slug:'music',label:'Music',description:'Add songs, performances, releases, covers and artist media.'},
  {slug:'live-battles',label:'Live Battles',description:'Run artist qualifying, fan voting, live DJ battles, sponsor breaks, brackets and winners.'},
+ {slug:'live-battles#battle-room-sponsors',label:'Battle Room Sponsors',description:'Upload the rotating sponsor ads shown inside the Indie Battle Room and set each sponsor destination link.'},
  {slug:'independent-music',label:'Independent Music Radar',description:'Find trending independent R&B, hip-hop, soul, Afrobeats and other emerging urban artists.'},
  {slug:'music-video-radar',label:'Music Video Radar',description:'Find official new music videos from independent and major artists, preview them, and publish them to Watch.'},
  {slug:'video-media',label:'Video & Media',description:'Upload videos, images, thumbnails and editorial media.'},
