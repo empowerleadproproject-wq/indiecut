@@ -16,8 +16,13 @@ export default function BattleLiveClient({slug,initialData,roomSponsors=[]}:Prop
  const entryB=useMemo(()=>data.entries.find((x:any)=>x.id===round?.entry_b_id)||data.finalists?.[1]||null,[data,round]);
  const currentTrack=contest.current_segment==='artist_a'?{url:round?.track_a_url||entryA?.track_url,title:round?.track_a_title||entryA?.track_title,artist:entryA}:contest.current_segment==='artist_b'?{url:round?.track_b_url||entryB?.track_url,title:round?.track_b_title||entryB?.track_title,artist:entryB}:null;
 
- async function refresh(){try{const res=await fetch(`/api/battles/${slug}`,{cache:'no-store'});if(res.ok)setData(await res.json())}catch{}}
- useEffect(()=>{const id=setInterval(refresh,3000);return()=>clearInterval(id)},[slug]);
+ async function refresh(){
+  try{
+   const res=await fetch(`/api/battles/${slug}?t=${Date.now()}`,{cache:'no-store',headers:{'cache-control':'no-cache'}});
+   if(res.ok)setData(await res.json());
+  }catch{}
+ }
+ useEffect(()=>{refresh();const id=setInterval(refresh,2500);return()=>clearInterval(id)},[slug]);
  useEffect(()=>{const id=setInterval(()=>setTick(Date.now()),500);return()=>clearInterval(id)},[]);
  useEffect(()=>{
   const audio=trackRef.current;if(!audio)return;
