@@ -15,10 +15,19 @@ const TRIGGERS=[
 const ACTIONS=[
  ['send_sms','Send SMS','Text an opted-in contact with TextGrid','SMS'],
  ['send_email','Send Email','Send an email through Indie Cut','✉'],
+ ['if_else','If / Else','Split the workflow based on contact data','◇'],
  ['wait','Wait','Pause before the next step','◷'],
  ['add_tag','Add Tag','Add a CRM tag to the contact','#'],
  ['update_status','Update Status','Move the contact to another CRM status','↻'],
  ['create_task','Create Task','Create a follow-up task','✓']
+];
+const BRANCH_ACTION_TYPES=['send_sms','send_email','add_tag','update_status','create_task'];
+const CONDITION_FIELDS=[
+ ['status','Status'],['genre','Genre'],['tag','Tag'],['city','City / State'],['source','Source'],
+ ['email_opt_in','Email opt-in'],['sms_opt_in','SMS opt-in'],['email','Email address'],['phone','Phone number']
+];
+const CONDITION_OPERATORS=[
+ ['equals','Equals'],['not_equals','Does not equal'],['contains','Contains'],['not_contains','Does not contain'],['exists','Exists'],['not_exists','Does not exist']
 ];
 
 const GENRES=['Hip-Hop','R&B','Gospel','Southern Soul','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'];
@@ -37,15 +46,30 @@ async function request(action:string,extra:any={}){
 function triggerLabel(type:string){return TRIGGERS.find(x=>x[0]===type)?.[1]||type}
 function actionMeta(type:string){return ACTIONS.find(x=>x[0]===type)||[type,type,'','•']}
 function sameTag(a:any,b:any){return String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase()}
+function conditionFieldLabel(field:string){return CONDITION_FIELDS.find(x=>x[0]===field)?.[1]||field}
+function conditionOperatorLabel(op:string){return CONDITION_OPERATORS.find(x=>x[0]===op)?.[1]||op}
 function stepSummary(step:any){
  const c=step.step_config||{};
  if(step.step_type==='send_sms')return c.message||'Compose SMS message';
  if(step.step_type==='send_email')return c.subject||'Compose email';
+ if(step.step_type==='if_else'){
+  const needsValue=!['exists','not_exists'].includes(c.operator||'equals');
+  return `If ${conditionFieldLabel(c.field||'status')} ${conditionOperatorLabel(c.operator||'equals').toLowerCase()}${needsValue&&c.value!==undefined?` ${String(c.value)}`:''}`;
+ }
  if(step.step_type==='wait')return `${c.amount||1} ${c.unit||'hours'}`;
  if(step.step_type==='add_tag')return c.tag?`Tag: ${c.tag}`:'Choose tag';
  if(step.step_type==='update_status')return c.status?`Set status to ${c.status}`:'Choose status';
  if(step.step_type==='create_task')return c.title||'Create a follow-up task';
  return '';
+}
+function defaultStepConfig(type:string){
+ if(type==='send_sms')return {message:''};
+ if(type==='send_email')return {subject:'',message:''};
+ if(type==='if_else')return {field:'status',operator:'equals',value:'approved',yes_steps:[],no_steps:[]};
+ if(type==='wait')return {amount:1,unit:'hours'};
+ if(type==='add_tag')return {tag:''};
+ if(type==='update_status')return {status:'active'};
+ return {title:'Follow up with {{artist_name}}',notes:'',priority:'normal',due_hours:24};
 }
 function fmtDateTime(value:any){
  if(!value)return '—';
@@ -129,7 +153,7 @@ export default function AutomationBuilder(){
  }
  function openActionPicker(index:number){setInsertAt(Math.max(0,Math.min(index,steps.length)));setSelectedStep(null)}
  function addStep(type:string){
-  const config=type==='send_sms'?{message:''}:type==='send_email'?{subject:'',message:''}:type==='wait'?{amount:1,unit:'hours'}:type==='add_tag'?{tag:''}:type==='update_status'?{status:'active'}:{title:'Follow up with {{artist_name}}',notes:'',priority:'normal',due_hours:24};
+  const config=defaultStepConfig(type);
   const index=Math.max(0,Math.min(insertAt,steps.length));
   const next={step_type:type,step_config:config};
   setSteps(v=>{const copy=[...v];copy.splice(index,0,next);return copy});
@@ -210,7 +234,7 @@ export default function AutomationBuilder(){
       <div className={styles.nodeBody}>{workflow.trigger_type==='sms_reply'?(workflow.trigger_config?.keyword?`Reply contains “${workflow.trigger_config.keyword}”`:'Any SMS reply'):workflow.trigger_type==='status_changed'?(workflow.trigger_config?.status?`Status becomes ${workflow.trigger_config.status}`:'Any status change'):workflow.trigger_type==='tag_added'?(workflow.trigger_config?.tag?`Tag ${workflow.trigger_config.tag} is added`:'Any tag added'):'Starts the workflow when this event occurs.'}</div>
      </div>
 
-     {steps.map((step:any,i:number)=>{const meta=actionMeta(step.step_type);return <div key={i} style={{width:'100%',display:'flex',flexDirection:'column',alignItems:'center'}}><div className={styles.connector}/><button className={styles.plus} title="Add an action here" aria-label={`Add action before step ${i+1}`} onClick={()=>openActionPicker(i)}>+</button><div className={styles.connector}/><div className={`${styles.node} ${styles.nodeAction}`} onClick={()=>{setSelectedStep(i);setInsertAt(i+1)}}><div className={styles.nodeHead}><div className={styles.nodeType}><span className={styles.icon}>{meta[3]}</span><div><div className={styles.nodeTitle}>{meta[1]}</div><div className={styles.nodeSub}>{stepSummary(step)}</div></div></div><div className={styles.stepTools}><button onClick={e=>{e.stopPropagation();moveStep(i,-1)}}>↑</button><button onClick={e=>{e.stopPropagation();moveStep(i,1)}}>↓</button><button onClick={e=>{e.stopPropagation();deleteStep(i)}}>×</button></div></div></div></div>})}
+     {steps.map((step:any,i:number)=>{const meta=actionMeta(step.step_type);const isBranch=step.step_type==='if_else';const c=step.step_config||{};return <div key={i} style={{width:'100%',display:'flex',flexDirection:'column',alignItems:'center'}}><div className={styles.connector}/><button className={styles.plus} title="Add an action here" aria-label={`Add action before step ${i+1}`} onClick={()=>openActionPicker(i)}>+</button><div className={styles.connector}/><div className={`${styles.node} ${styles.nodeAction}`} onClick={()=>{setSelectedStep(i);setInsertAt(i+1)}}><div className={styles.nodeHead}><div className={styles.nodeType}><span className={styles.icon}>{meta[3]}</span><div><div className={styles.nodeTitle}>{meta[1]}</div><div className={styles.nodeSub}>{stepSummary(step)}</div></div></div><div className={styles.stepTools}><button onClick={e=>{e.stopPropagation();moveStep(i,-1)}}>↑</button><button onClick={e=>{e.stopPropagation();moveStep(i,1)}}>↓</button><button onClick={e=>{e.stopPropagation();deleteStep(i)}}>×</button></div></div>{isBranch&&<div className={styles.nodeBody} style={{display:'flex',gap:14,flexWrap:'wrap'}}><span><strong>YES</strong> · {(c.yes_steps||[]).length} action{(c.yes_steps||[]).length===1?'':'s'}</span><span><strong>NO</strong> · {(c.no_steps||[]).length} action{(c.no_steps||[]).length===1?'':'s'}</span></div>}</div></div>})}
      <div className={styles.connector}/><button className={styles.plus} title="Add an action here" aria-label="Add action at end of workflow" onClick={()=>openActionPicker(steps.length)}>+</button><div className={styles.connector}/><div className={styles.tiny}>END</div>
     </div>
    </main>
@@ -230,7 +254,7 @@ export default function AutomationBuilder(){
     </>:<>
      <h3>Add an Action</h3><p className={styles.muted}>Choose what should happen {insertLabel}. Clicking an action adds it immediately to the workflow.</p>
      <div className={styles.sectionTitle}>MESSAGING</div><div className={styles.library}>{ACTIONS.slice(0,2).map(a=><button className={styles.libraryButton} key={a[0]} onClick={()=>addStep(a[0])}><span className={styles.icon}>{a[3]}</span><span>{a[1]}<div className={styles.tiny}>{a[2]}</div></span></button>)}</div>
-     <div className={styles.sectionTitle}>WORKFLOW</div><div className={styles.library}>{ACTIONS.slice(2).map(a=><button className={styles.libraryButton} key={a[0]} onClick={()=>addStep(a[0])}><span className={styles.icon}>{a[3]}</span><span>{a[1]}<div className={styles.tiny}>{a[2]}</div></span></button>)}</div>
+     <div className={styles.sectionTitle}>LOGIC + WORKFLOW</div><div className={styles.library}>{ACTIONS.slice(2).map(a=><button className={styles.libraryButton} key={a[0]} onClick={()=>addStep(a[0])}><span className={styles.icon}>{a[3]}</span><span>{a[1]}<div className={styles.tiny}>{a[2]}</div></span></button>)}</div>
      {workflow.id&&<><div className={styles.sectionTitle}>TEST / MANUAL ENROLL</div><label className={styles.label}>Contact<select className={styles.select} value={enrollContact} onChange={e=>setEnrollContact(e.target.value)}><option value="">Choose contact…</option>{(data.contacts||[]).map((c:any)=><option key={c.id} value={c.id}>{c.artist_name||c.full_name||c.email||c.phone}</option>)}</select></label><button className={styles.primary} style={{marginTop:8}} disabled={!enrollContact} onClick={enroll}>Enroll Contact</button></>}
     </>}
    </aside>
@@ -315,18 +339,49 @@ export default function AutomationBuilder(){
  </section>
 }
 
-function StepEditor({step,tags,onChange}:{step:any;tags:any[];onChange:(patch:any)=>void}){
+function ConditionValueEditor({field,operator,value,tags,onChange}:{field:string;operator:string;value:any;tags:any[];onChange:(value:any)=>void}){
+ if(operator==='exists'||operator==='not_exists')return null;
+ if(field==='status')return <label className={styles.label}>Value<select className={styles.select} value={value||''} onChange={e=>onChange(e.target.value)}>{STATUSES.map(x=><option key={x}>{x}</option>)}</select></label>;
+ if(field==='genre')return <label className={styles.label}>Value<select className={styles.select} value={value||''} onChange={e=>onChange(e.target.value)}>{GENRES.map(x=><option key={x}>{x}</option>)}</select></label>;
+ if(field==='tag')return <label className={styles.label}>Tag<select className={styles.select} value={value||''} onChange={e=>onChange(e.target.value)}><option value="">Choose tag…</option>{value&&!tags.some((t:any)=>sameTag(t.name,value))&&<option value={value}>{value}</option>}{tags.map((t:any)=><option key={t.id} value={t.name}>{t.name}</option>)}</select></label>;
+ if(field==='email_opt_in'||field==='sms_opt_in')return <label className={styles.label}>Value<select className={styles.select} value={String(value??'true')} onChange={e=>onChange(e.target.value==='true')}><option value="true">Yes</option><option value="false">No</option></select></label>;
+ return <label className={styles.label}>Value<input className={styles.input} value={value??''} onChange={e=>onChange(e.target.value)} placeholder="Enter value"/></label>;
+}
+
+function BranchEditor({label,description,steps,tags,onChange}:{label:string;description:string;steps:any[];tags:any[];onChange:(steps:any[])=>void}){
+ const list=Array.isArray(steps)?steps:[];
+ function add(type:string){onChange([...list,{step_type:type,step_config:defaultStepConfig(type)}])}
+ function patch(index:number,patch:any){onChange(list.map((s:any,i:number)=>i===index?{...s,step_config:{...(s.step_config||{}),...patch}}:s))}
+ function remove(index:number){onChange(list.filter((_:any,i:number)=>i!==index))}
+ return <div style={{border:'1px solid #dfe3e8',borderRadius:10,padding:12,marginTop:14,background:'#fff'}}>
+  <div style={{display:'flex',justifyContent:'space-between',gap:10,alignItems:'start'}}><div><strong>{label}</strong><div className={styles.tiny} style={{marginTop:3}}>{description}</div></div><span className={styles.badge}>{list.length} ACTION{list.length===1?'':'S'}</span></div>
+  {list.map((s:any,i:number)=><div key={i} style={{marginTop:12,paddingTop:12,borderTop:'1px solid #eef0f3'}}><div style={{display:'flex',justifyContent:'space-between',gap:10,alignItems:'center',marginBottom:8}}><strong style={{fontSize:12}}>{actionMeta(s.step_type)[1]}</strong><button type="button" className={styles.danger} onClick={()=>remove(i)}>Remove</button></div><StepEditor step={s} tags={tags} onChange={(p:any)=>patch(i,p)} nested/></div>)}
+  {!list.length&&<div className={styles.empty} style={{marginTop:10}}>No actions on this branch yet.</div>}
+  <div className={styles.sectionTitle} style={{marginTop:12}}>ADD TO {label}</div><div className={styles.library}>{ACTIONS.filter(a=>BRANCH_ACTION_TYPES.includes(a[0])).map(a=><button type="button" className={styles.libraryButton} key={a[0]} onClick={()=>add(a[0])}><span className={styles.icon}>{a[3]}</span><span>{a[1]}<div className={styles.tiny}>{a[2]}</div></span></button>)}</div>
+ </div>;
+}
+
+function StepEditor({step,tags,onChange,nested=false}:{step:any;tags:any[];onChange:(patch:any)=>void;nested?:boolean}){
  const c=step.step_config||{};
+ const field=String(c.field||'status'),operator=String(c.operator||'equals');
  return <>
-  <h3>{actionMeta(step.step_type)[1]}</h3><p className={styles.muted}>{actionMeta(step.step_type)[2]}</p>
+  {!nested&&<><h3>{actionMeta(step.step_type)[1]}</h3><p className={styles.muted}>{actionMeta(step.step_type)[2]}</p></>}
   <div className={styles.form}>
    {step.step_type==='send_sms'&&<label className={styles.label}>SMS message<textarea className={styles.textarea} rows={7} value={c.message||''} onChange={e=>onChange({message:e.target.value})} placeholder="Hey {{artist_name}}, your voting page is live…"/></label>}
    {step.step_type==='send_email'&&<><label className={styles.label}>Subject<input className={styles.input} value={c.subject||''} onChange={e=>onChange({subject:e.target.value})}/></label><label className={styles.label}>Email message<textarea className={styles.textarea} rows={7} value={c.message||''} onChange={e=>onChange({message:e.target.value})}/></label></>}
+   {step.step_type==='if_else'&&<>
+    <label className={styles.label}>Check this field<select className={styles.select} value={field} onChange={e=>onChange({field:e.target.value,value:e.target.value==='email_opt_in'||e.target.value==='sms_opt_in'?true:''})}>{CONDITION_FIELDS.map(x=><option key={x[0]} value={x[0]}>{x[1]}</option>)}</select></label>
+    <label className={styles.label}>Condition<select className={styles.select} value={operator} onChange={e=>onChange({operator:e.target.value})}>{CONDITION_OPERATORS.map(x=><option key={x[0]} value={x[0]}>{x[1]}</option>)}</select></label>
+    <ConditionValueEditor field={field} operator={operator} value={c.value} tags={tags} onChange={value=>onChange({value})}/>
+    <div className={styles.message} style={{marginTop:4}}>The contact follows exactly one branch. After that branch finishes, the main workflow continues to the next step.</div>
+    <BranchEditor label="YES" description="Runs when the condition matches." steps={c.yes_steps||[]} tags={tags} onChange={yes_steps=>onChange({yes_steps})}/>
+    <BranchEditor label="NO" description="Runs when the condition does not match." steps={c.no_steps||[]} tags={tags} onChange={no_steps=>onChange({no_steps})}/>
+   </>}
    {step.step_type==='wait'&&<><label className={styles.label}>Amount<input className={styles.input} type="number" min="1" value={c.amount||1} onChange={e=>onChange({amount:Number(e.target.value)})}/></label><label className={styles.label}>Unit<select className={styles.select} value={c.unit||'hours'} onChange={e=>onChange({unit:e.target.value})}><option>minutes</option><option>hours</option><option>days</option></select></label></>}
    {step.step_type==='add_tag'&&<label className={styles.label}>Tag<select className={styles.select} value={c.tag||''} onChange={e=>onChange({tag:e.target.value})}><option value="">Choose tag…</option>{c.tag&&!tags.some((t:any)=>sameTag(t.name,c.tag))&&<option value={c.tag}>{c.tag}</option>}{tags.map((t:any)=><option key={t.id} value={t.name}>{t.name}</option>)}</select></label>}
    {step.step_type==='update_status'&&<label className={styles.label}>New status<select className={styles.select} value={c.status||'active'} onChange={e=>onChange({status:e.target.value})}>{STATUSES.map(x=><option key={x}>{x}</option>)}</select></label>}
    {step.step_type==='create_task'&&<><label className={styles.label}>Task title<input className={styles.input} value={c.title||''} onChange={e=>onChange({title:e.target.value})}/></label><label className={styles.label}>Notes<textarea className={styles.textarea} rows={4} value={c.notes||''} onChange={e=>onChange({notes:e.target.value})}/></label><label className={styles.label}>Due in hours<input className={styles.input} type="number" min="0" value={c.due_hours||24} onChange={e=>onChange({due_hours:Number(e.target.value)})}/></label></>}
-   <div className={styles.tiny}>Merge fields: {'{{artist_name}}'}, {'{{first_name}}'}, {'{{genre}}'}, {'{{city}}'}</div>
+   {step.step_type!=='if_else'&&<div className={styles.tiny}>Merge fields: {'{{artist_name}}'}, {'{{first_name}}'}, {'{{genre}}'}, {'{{city}}'}</div>}
   </div>
  </>
 }
