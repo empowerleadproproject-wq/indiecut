@@ -6,6 +6,8 @@ import {enrollMatchingWorkflows} from '../../../../lib/crm-workflows';
 
 export const dynamic='force-dynamic';
 
+type SocialNetwork='instagram'|'tiktok'|'youtube'|'facebook';
+
 function serviceDb(){
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
  if(!url||!key)return null;
@@ -20,6 +22,22 @@ async function adminDb(){
 function cleanTags(value:any){return Array.from(new Set((Array.isArray(value)?value:String(value||'').split(',')).map((x:any)=>String(x).trim()).filter(Boolean))).slice(0,30)}
 function ids(value:any){return Array.from(new Set((Array.isArray(value)?value:[]).map((x:any)=>String(x)).filter(Boolean))).slice(0,500)}
 function addedTags(before:any,after:any){const old=new Set(cleanTags(before).map((x:any)=>String(x).toLowerCase()));return cleanTags(after).filter((x:any)=>!old.has(String(x).toLowerCase()))}
+function cleanSocial(value:any,network:SocialNetwork){
+ const raw=String(value||'').trim();if(!raw)return null;
+ const handle=raw.replace(/^@/,'').trim();
+ if(!/^https?:\/\//i.test(raw)&&/^[A-Za-z0-9._-]+$/.test(handle)){
+  if(network==='instagram')return `https://www.instagram.com/${handle}/`;
+  if(network==='tiktok')return `https://www.tiktok.com/@${handle}`;
+  if(network==='youtube')return `https://www.youtube.com/@${handle}`;
+  return `https://www.facebook.com/${handle}`;
+ }
+ try{
+  const u=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);const host=u.hostname.toLowerCase().replace(/^www\./,'');
+  const domains:Record<SocialNetwork,string[]>={instagram:['instagram.com'],tiktok:['tiktok.com'],youtube:['youtube.com','youtu.be'],facebook:['facebook.com','fb.com']};
+  if(domains[network].some(domain=>host===domain||host.endsWith(`.${domain}`)))return u.toString();
+ }catch{}
+ return null;
+}
 
 async function snapshot(db:any){
  const [{data:contacts},{data:templates},{data:campaigns},{data:activity},{data:smartLists},{data:tasks},{data:opportunities},{count:queued},{count:sent},{count:failed}]=await Promise.all([
@@ -56,16 +74,19 @@ export async function POST(request:Request){
  const a=await adminDb();if(a.error)return a.error;const db=a.db;const body=await request.json().catch(()=>({}));const action=String(body.action||'');
  try{
   if(action==='save_contact'){
-   const p=body.contact||{};const email=String(p.email||'').trim().toLowerCase()||null;const payload:any={artist_name:String(p.artist_name||'').trim()||null,full_name:String(p.full_name||'').trim()||null,email,phone:String(p.phone||'').trim()||null,genre:String(p.genre||'').trim()||null,city:String(p.city||'').trim()||null,social_handle:String(p.social_handle||'').trim()||null,source:String(p.source||'manual').trim()||'manual',status:String(p.status||'lead').trim()||'lead',tags:cleanTags(p.tags),notes:String(p.notes||'').trim()||null,email_opt_in:Boolean(p.email_opt_in),sms_opt_in:Boolean(p.sms_opt_in),updated_at:new Date().toISOString()};
+   const p=body.contact||{};const email=String(p.email||'').trim().toLowerCase()||null;
+   const payload:any={artist_name:String(p.artist_name||'').trim()||null,full_name:String(p.full_name||'').trim()||null,email,phone:String(p.phone||'').trim()||null,genre:String(p.genre||'').trim()||null,city:String(p.city||'').trim()||null,social_handle:String(p.social_handle||'').trim()||null,instagram_url:cleanSocial(p.instagram_url,'instagram'),tiktok_url:cleanSocial(p.tiktok_url,'tiktok'),youtube_url:cleanSocial(p.youtube_url,'youtube'),facebook_url:cleanSocial(p.facebook_url,'facebook'),source:String(p.source||'manual').trim()||'manual',status:String(p.status||'lead').trim()||'lead',tags:cleanTags(p.tags),notes:String(p.notes||'').trim()||null,email_opt_in:Boolean(p.email_opt_in),sms_opt_in:Boolean(p.sms_opt_in),updated_at:new Date().toISOString()};
    let contactId=String(p.id||''),before:any=null,wasCreated=false;
-   if(contactId){const q=await db.from('crm_contacts').select('id,status,tags').eq('id',contactId).maybeSingle();before=q.data;const {error}=await db.from('crm_contacts').update(payload).eq('id',contactId);if(error)throw error;}
+   if(contactId){const q=await db.from('crm_contacts').select('id,status,tags,battle_entry_id').eq('id',contactId).maybeSingle();before=q.data;const {error}=await db.from('crm_contacts').update(payload).eq('id',contactId);if(error)throw error;}
    else{
-    let existing:any=null;if(email){const q=await db.from('crm_contacts').select('id,status,tags').eq('email',email).maybeSingle();existing=q.data}
+    let existing:any=null;if(email){const q=await db.from('crm_contacts').select('id,status,tags,battle_entry_id').eq('email',email).maybeSingle();existing=q.data}
     if(existing){contactId=existing.id;before=existing;const {error}=await db.from('crm_contacts').update(payload).eq('id',existing.id);if(error)throw error;}
-    else{const {data:newRow,error}=await db.from('crm_contacts').insert(payload).select('id').single();if(error)throw error;contactId=newRow.id;wasCreated=true;}
+    else{const {data:newRow,error}=await db.from('crm_contacts').insert(payload).select('id,battle_entry_id').single();if(error)throw error;contactId=newRow.id;before=newRow;wasCreated=true;}
    }
    if(contactId){
-    await db.from('crm_activity').insert({contact_id:contactId,activity_type:wasCreated?'contact_created':'contact_updated',detail:wasCreated?'Contact created':'Contact updated'});
+    const linkedEntryId=before?.battle_entry_id||null;
+    if(linkedEntryId){const {error:entryError}=await db.from('battle_entries').update({instagram_url:payload.instagram_url,tiktok_url:payload.tiktok_url,youtube_url:payload.youtube_url,facebook_url:payload.facebook_url,updated_at:new Date().toISOString()}).eq('id',linkedEntryId);if(entryError)throw entryError;}
+    await db.from('crm_activity').insert({contact_id:contactId,activity_type:wasCreated?'contact_created':'contact_updated',detail:linkedEntryId?'Contact updated; public artist profile synced':wasCreated?'Contact created':'Contact updated'});
     if(wasCreated){
      await enrollMatchingWorkflows(db,contactId,'contact_created',{});
      for(const tag of payload.tags||[])await enrollMatchingWorkflows(db,contactId,'tag_added',{tag});
