@@ -14,7 +14,12 @@ async function readSubmissions(db:any){const {data}=await db.from('site_settings
 async function writeSubmissions(db:any,rows:any[]){return db.from('site_settings').upsert({setting_key:'battle_submissions',setting_value:JSON.stringify(rows),updated_at:new Date().toISOString()},{onConflict:'setting_key'})}
 async function publicRows(db:any){const rows:any[]=await readSubmissions(db);return rows.map(({ip_hash,...rest}:any)=>rest)}
 async function contests(db:any){const {data}=await db.from('battle_contests').select('id,title,slug,status,genre,qualifying_starts_at,qualifying_ends_at').neq('status','completed').order('created_at',{ascending:false});return data||[]}
-async function findCrmContact(db:any,item:any){const email=String(item?.email||'').trim().toLowerCase();if(email){const {data}=await db.from('crm_contacts').select('id').eq('email',email).maybeSingle();if(data)return data}const phone=String(item?.phone||'').trim();if(phone){const {data}=await db.from('crm_contacts').select('id').eq('phone',phone).maybeSingle();if(data)return data}return null}
+async function findCrmContact(db:any,item:any){
+ const fields='id,instagram_url,tiktok_url,youtube_url,facebook_url';
+ const email=String(item?.email||'').trim().toLowerCase();if(email){const {data}=await db.from('crm_contacts').select(fields).eq('email',email).maybeSingle();if(data)return data}
+ const phone=String(item?.phone||'').replace(/\D/g,'');if(phone){const {data:contacts}=await db.from('crm_contacts').select(`${fields},phone`);const match=(contacts||[]).find((x:any)=>String(x.phone||'').replace(/\D/g,'')===phone);if(match)return match}
+ return null;
+}
 
 export async function GET(){const a=await adminDb();if(a.error)return a.error;const db=a.db!;return NextResponse.json({submissions:await publicRows(db),contests:await contests(db)})}
 
@@ -26,11 +31,15 @@ export async function POST(request:Request){
   const {data:contest}=await db.from('battle_contests').select('id,title,slug,genre').eq('id',contestId).maybeSingle();if(!contest)return NextResponse.json({error:'Competition not found.'},{status:404});
   if(!contest.genre)return NextResponse.json({error:'Set the competition genre before approving artists.'},{status:400});
   if(String(contest.genre).trim().toLowerCase()!==String(item.genre||'').trim().toLowerCase())return NextResponse.json({error:`Genre mismatch: ${item.artist_name} submitted as ${item.genre}, but this competition is ${contest.genre}.`},{status:400});
+  const crmContact=await findCrmContact(db,item);
   let base=slugify(item.artist_name)||'artist';let slug=base;let n=2;while(true){const {data}=await db.from('battle_entries').select('id').eq('contest_id',contestId).eq('slug',slug).maybeSingle();if(!data)break;slug=`${base}-${n++}`}
-  const {data:entry,error}=await db.from('battle_entries').insert({contest_id:contestId,artist_name:item.artist_name,slug,genre:item.genre,city:item.city||null,bio:item.bio||null,image_url:item.image_url||null,track_title:item.track_title||null,track_url:item.track_url||null,track_cover_url:item.image_url||null,instagram_url:item.instagram_url||null,tiktok_url:item.tiktok_url||null,active:true}).select('id,slug').single();if(error)return NextResponse.json({error:error.message},{status:400});
+  const {data:entry,error}=await db.from('battle_entries').insert({contest_id:contestId,artist_name:item.artist_name,slug,genre:item.genre,city:item.city||null,bio:item.bio||null,image_url:item.image_url||null,track_title:item.track_title||null,track_url:item.track_url||null,track_cover_url:item.image_url||null,instagram_url:item.instagram_url||crmContact?.instagram_url||null,tiktok_url:item.tiktok_url||crmContact?.tiktok_url||null,youtube_url:item.youtube_url||crmContact?.youtube_url||null,facebook_url:item.facebook_url||crmContact?.facebook_url||null,active:true}).select('id,slug').single();if(error)return NextResponse.json({error:error.message},{status:400});
   const fan_path=`/battles/${contest.slug}/artists/${entry.slug}`;
-  rows[index]={...item,status:'approved',approved_to_contest_id:contestId,approved_to_contest_title:contest.title,battle_entry_id:entry.id,fan_path,updated_at:new Date().toISOString()};const {error:saveError}=await writeSubmissions(db,rows);if(saveError)return NextResponse.json({error:saveError.message},{status:400});
-  try{const crmContact=await findCrmContact(db,item);if(crmContact?.id)await enrollMatchingWorkflows(db,crmContact.id,'battle_submission_approved',{submissionId:item.id,contestId,contestTitle:contest.title,genre:item.genre,fan_path});}catch(e){console.error('Battle approval workflow trigger failed',e)}
+  rows[index]={...item,status:'approved',approved_to_contest_id:contestId,approved_to_contest_title:contest.title,battle_entry_id:entry.id,fan_path,instagram_url:item.instagram_url||crmContact?.instagram_url||null,tiktok_url:item.tiktok_url||crmContact?.tiktok_url||null,youtube_url:item.youtube_url||crmContact?.youtube_url||null,facebook_url:item.facebook_url||crmContact?.facebook_url||null,updated_at:new Date().toISOString()};const {error:saveError}=await writeSubmissions(db,rows);if(saveError)return NextResponse.json({error:saveError.message},{status:400});
+  if(crmContact?.id){
+   const {error:linkError}=await db.from('crm_contacts').update({battle_entry_id:entry.id,updated_at:new Date().toISOString()}).eq('id',crmContact.id);if(linkError)console.error('CRM battle artist link failed',linkError);
+   try{await enrollMatchingWorkflows(db,crmContact.id,'battle_submission_approved',{submissionId:item.id,contestId,contestTitle:contest.title,genre:item.genre,fan_path});}catch(e){console.error('Battle approval workflow trigger failed',e)}
+  }
   return NextResponse.json({ok:true,submissions:await publicRows(db),contests:await contests(db),entry:{...entry,fan_path}});
  }
  if(action==='update_photo'){
