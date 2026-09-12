@@ -17,18 +17,24 @@ async function adminDb(){
  return {db};
 }
 function cleanTags(value:any){return Array.from(new Set((Array.isArray(value)?value:String(value||'').split(',')).map((x:any)=>String(x).trim()).filter(Boolean))).slice(0,30)}
+function ids(value:any){return Array.from(new Set((Array.isArray(value)?value:[]).map((x:any)=>String(x)).filter(Boolean))).slice(0,500)}
+
 async function snapshot(db:any){
- const [{data:contacts},{data:templates},{data:campaigns},{data:activity},{count:queued},{count:sent},{count:failed}]=await Promise.all([
+ const [{data:contacts},{data:templates},{data:campaigns},{data:activity},{data:smartLists},{data:tasks},{data:opportunities},{count:queued},{count:sent},{count:failed}]=await Promise.all([
   db.from('crm_contacts').select('*').order('updated_at',{ascending:false}).limit(1000),
   db.from('crm_email_templates').select('*').order('updated_at',{ascending:false}).limit(100),
   db.from('crm_email_campaigns').select('*').order('created_at',{ascending:false}).limit(100),
-  db.from('crm_activity').select('*').order('created_at',{ascending:false}).limit(300),
+  db.from('crm_activity').select('*').order('created_at',{ascending:false}).limit(500),
+  db.from('crm_smart_lists').select('*').order('updated_at',{ascending:false}).limit(100),
+  db.from('crm_tasks').select('*').order('due_at',{ascending:true,nullsFirst:false}).limit(500),
+  db.from('crm_opportunities').select('*').order('updated_at',{ascending:false}).limit(500),
   db.from('crm_email_queue').select('*',{count:'exact',head:true}).eq('status','queued'),
   db.from('crm_email_queue').select('*',{count:'exact',head:true}).eq('status','sent'),
   db.from('crm_email_queue').select('*',{count:'exact',head:true}).eq('status','failed')
  ]);
- return {contacts:contacts||[],templates:templates||[],campaigns:campaigns||[],activity:activity||[],queueStats:{queued:queued||0,sent:sent||0,failed:failed||0},integrations:{email:Boolean(process.env.RESEND_API_KEY&&process.env.INDIECUT_FROM_EMAIL),ghl:Boolean(process.env.GHL_PRIVATE_INTEGRATION_TOKEN&&process.env.GHL_LOCATION_ID)}};
+ return {contacts:contacts||[],templates:templates||[],campaigns:campaigns||[],activity:activity||[],smartLists:smartLists||[],tasks:tasks||[],opportunities:opportunities||[],queueStats:{queued:queued||0,sent:sent||0,failed:failed||0},integrations:{email:Boolean(process.env.RESEND_API_KEY&&process.env.INDIECUT_FROM_EMAIL),ghl:Boolean(process.env.GHL_PRIVATE_INTEGRATION_TOKEN&&process.env.GHL_LOCATION_ID)}};
 }
+
 async function sendEmail(to:string,subject:string,body:string){
  const key=process.env.RESEND_API_KEY,from=process.env.INDIECUT_FROM_EMAIL;
  if(!key||!from)throw new Error('Email sending is not connected yet. Add RESEND_API_KEY and INDIECUT_FROM_EMAIL in Vercel.');
@@ -49,13 +55,36 @@ export async function POST(request:Request){
  try{
   if(action==='save_contact'){
    const p=body.contact||{};const email=String(p.email||'').trim().toLowerCase()||null;const payload:any={artist_name:String(p.artist_name||'').trim()||null,full_name:String(p.full_name||'').trim()||null,email,phone:String(p.phone||'').trim()||null,genre:String(p.genre||'').trim()||null,city:String(p.city||'').trim()||null,social_handle:String(p.social_handle||'').trim()||null,source:String(p.source||'manual').trim()||'manual',status:String(p.status||'lead').trim()||'lead',tags:cleanTags(p.tags),notes:String(p.notes||'').trim()||null,email_opt_in:Boolean(p.email_opt_in),sms_opt_in:Boolean(p.sms_opt_in),updated_at:new Date().toISOString()};
-   if(p.id){const {error}=await db.from('crm_contacts').update(payload).eq('id',String(p.id));if(error)throw error;}
-   else{let existing:any=null;if(email){const q=await db.from('crm_contacts').select('id').eq('email',email).maybeSingle();existing=q.data}if(existing){const {error}=await db.from('crm_contacts').update(payload).eq('id',existing.id);if(error)throw error;}else{const {error}=await db.from('crm_contacts').insert(payload);if(error)throw error;}}
+   let contactId=String(p.id||'');
+   if(contactId){const {error}=await db.from('crm_contacts').update(payload).eq('id',contactId);if(error)throw error;}
+   else{let existing:any=null;if(email){const q=await db.from('crm_contacts').select('id').eq('email',email).maybeSingle();existing=q.data}if(existing){contactId=existing.id;const {error}=await db.from('crm_contacts').update(payload).eq('id',existing.id);if(error)throw error;}else{const {data:newRow,error}=await db.from('crm_contacts').insert(payload).select('id').single();if(error)throw error;contactId=newRow.id;}}
+   if(contactId)await db.from('crm_activity').insert({contact_id:contactId,activity_type:'contact_updated',detail:p.id?'Contact updated':'Contact created'});
   }else if(action==='delete_contact'){
    const {error}=await db.from('crm_contacts').delete().eq('id',String(body.contactId||''));if(error)throw error;
+  }else if(action==='bulk_delete_contacts'){
+   const contactIds=ids(body.contactIds);if(!contactIds.length)return NextResponse.json({error:'Select at least one contact.'},{status:400});const {error}=await db.from('crm_contacts').delete().in('id',contactIds);if(error)throw error;
+  }else if(action==='bulk_update_contacts'){
+   const contactIds=ids(body.contactIds);if(!contactIds.length)return NextResponse.json({error:'Select at least one contact.'},{status:400});const patch:any={updated_at:new Date().toISOString()};if(body.status)patch.status=String(body.status);if(body.email_opt_in!==undefined)patch.email_opt_in=Boolean(body.email_opt_in);if(body.sms_opt_in!==undefined)patch.sms_opt_in=Boolean(body.sms_opt_in);
+   if(body.addTag){const {data:rows,error:e1}=await db.from('crm_contacts').select('id,tags').in('id',contactIds);if(e1)throw e1;for(const row of rows||[]){const tags=cleanTags([...(row.tags||[]),String(body.addTag)]);const {error}=await db.from('crm_contacts').update({...patch,tags}).eq('id',row.id);if(error)throw error;}}
+   else{const {error}=await db.from('crm_contacts').update(patch).in('id',contactIds);if(error)throw error;}
   }else if(action==='add_note'){
    const contactId=String(body.contactId||''),detail=String(body.detail||'').trim();if(!contactId||!detail)return NextResponse.json({error:'Contact and note are required.'},{status:400});
    const {error}=await db.from('crm_activity').insert({contact_id:contactId,activity_type:'note',detail});if(error)throw error;
+  }else if(action==='save_smart_list'){
+   const p=body.smartList||{};const payload={name:String(p.name||'').trim(),filter_status:String(p.filter_status||'').trim()||null,filter_genre:String(p.filter_genre||'').trim()||null,filter_tag:String(p.filter_tag||'').trim()||null,updated_at:new Date().toISOString()};if(!payload.name)return NextResponse.json({error:'Smart list name is required.'},{status:400});
+   if(p.id){const {error}=await db.from('crm_smart_lists').update(payload).eq('id',String(p.id));if(error)throw error;}else{const {error}=await db.from('crm_smart_lists').insert(payload);if(error)throw error;}
+  }else if(action==='delete_smart_list'){
+   const {error}=await db.from('crm_smart_lists').delete().eq('id',String(body.smartListId||''));if(error)throw error;
+  }else if(action==='save_task'){
+   const p=body.task||{};const payload={contact_id:p.contact_id||null,title:String(p.title||'').trim(),due_at:p.due_at?new Date(p.due_at).toISOString():null,status:String(p.status||'open'),priority:String(p.priority||'normal'),notes:String(p.notes||'').trim()||null,updated_at:new Date().toISOString()};if(!payload.title)return NextResponse.json({error:'Task title is required.'},{status:400});if(p.id){const {error}=await db.from('crm_tasks').update(payload).eq('id',String(p.id));if(error)throw error;}else{const {error}=await db.from('crm_tasks').insert(payload);if(error)throw error;}
+  }else if(action==='toggle_task'){
+   const {error}=await db.from('crm_tasks').update({status:String(body.status||'done'),updated_at:new Date().toISOString()}).eq('id',String(body.taskId||''));if(error)throw error;
+  }else if(action==='delete_task'){
+   const {error}=await db.from('crm_tasks').delete().eq('id',String(body.taskId||''));if(error)throw error;
+  }else if(action==='save_opportunity'){
+   const p=body.opportunity||{};const payload={contact_id:p.contact_id||null,title:String(p.title||'').trim(),stage:String(p.stage||'new'),value:Number(p.value||0),notes:String(p.notes||'').trim()||null,updated_at:new Date().toISOString()};if(!payload.title)return NextResponse.json({error:'Opportunity title is required.'},{status:400});if(p.id){const {error}=await db.from('crm_opportunities').update(payload).eq('id',String(p.id));if(error)throw error;}else{const {error}=await db.from('crm_opportunities').insert(payload);if(error)throw error;}
+  }else if(action==='delete_opportunity'){
+   const {error}=await db.from('crm_opportunities').delete().eq('id',String(body.opportunityId||''));if(error)throw error;
   }else if(action==='save_template'){
    const p=body.template||{};const payload={name:String(p.name||'').trim(),subject:String(p.subject||'').trim(),body:String(p.body||'').trim(),active:p.active!==false,updated_at:new Date().toISOString()};if(!payload.name||!payload.subject||!payload.body)return NextResponse.json({error:'Template name, subject and body are required.'},{status:400});
    if(p.id){const {error}=await db.from('crm_email_templates').update(payload).eq('id',String(p.id));if(error)throw error;}else{const {error}=await db.from('crm_email_templates').insert(payload);if(error)throw error;}
