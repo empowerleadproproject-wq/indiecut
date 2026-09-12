@@ -10,7 +10,7 @@ type Settings={
  google_ads_enabled:boolean;google_ads_id:string;google_ads_conversion_label:string;
  tiktok_enabled:boolean;tiktok_pixel_id:string;
  gtm_enabled:boolean;gtm_container_id:string;
- disabled_for_admin?:boolean;
+ is_admin?:boolean;
 };
 const EMPTY:Settings={meta_enabled:false,meta_pixel_id:'',ga4_enabled:false,ga4_measurement_id:'',google_ads_enabled:false,google_ads_id:'',google_ads_conversion_label:'',tiktok_enabled:false,tiktok_pixel_id:'',gtm_enabled:false,gtm_container_id:''};
 
@@ -44,27 +44,32 @@ function initGtm(containerId:string){
 
 export default function MarketingPixels(){
  const pathname=usePathname();const search=useSearchParams();const [settings,setSettings]=useState<Settings|null>(null);const initialized=useRef(false);
+ const pixelTest=search?.get('pixel_test')==='1';
  useEffect(()=>{fetch('/api/public/tracking-pixels',{cache:'no-store'}).then(r=>r.json()).then(j=>setSettings({...EMPTY,...j})).catch(()=>setSettings(EMPTY))},[]);
  useEffect(()=>{
-  if(!settings||settings.disabled_for_admin||initialized.current)return;
-  window.__indiecutTrackingSettings=settings;
+  if(!settings||initialized.current)return;
+  const suppress=Boolean(settings.is_admin&&!pixelTest);
+  window.__indiecutTrackingSettings={...settings,suppress_events:suppress,pixel_test:pixelTest};
   if(settings.meta_enabled&&settings.meta_pixel_id)initMeta(settings.meta_pixel_id);
   initGoogle(settings);
   if(settings.tiktok_enabled&&settings.tiktok_pixel_id)initTikTok(settings.tiktok_pixel_id);
   if(settings.gtm_enabled&&settings.gtm_container_id)initGtm(settings.gtm_container_id);
   initialized.current=true;
- },[settings]);
+ },[settings,pixelTest]);
  useEffect(()=>{
-  if(!settings||settings.disabled_for_admin||!initialized.current||!pathname||pathname.startsWith('/admin')||pathname.startsWith('/api'))return;
+  if(!settings||!initialized.current||!pathname||pathname.startsWith('/admin')||pathname.startsWith('/api'))return;
+  const suppress=Boolean(settings.is_admin&&!pixelTest);
+  window.__indiecutTrackingSettings={...settings,suppress_events:suppress,pixel_test:pixelTest};
   const q=search?.toString();const path=q?`${pathname}?${q}`:pathname;
   const timer=window.setTimeout(()=>{
    trackMarketingPageView(path);
+   if(pixelTest&&settings.is_admin)trackMarketingEvent('IndieCutPixelTest',{path:pathname});
    if(pathname==='/battles/rankings')trackMarketingEvent('RankingsView',{path:pathname});
    else if(/^\/battles\/[^/]+\/artists\/[^/]+/.test(pathname))trackMarketingEvent('ArtistProfileView',{path:pathname});
    else if(pathname==='/battles/submit')trackMarketingEvent('ArtistSubmissionPageView',{path:pathname});
    else if(/^\/battles\/[^/]+$/.test(pathname))trackMarketingEvent('BattleView',{path:pathname});
-  },250);
+  },300);
   return()=>window.clearTimeout(timer);
- },[pathname,search,settings]);
+ },[pathname,search,settings,pixelTest]);
  return null;
 }
