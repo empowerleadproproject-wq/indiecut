@@ -127,7 +127,10 @@ export async function POST(req:Request){
       const now=new Date().toISOString();
       const {error}=await db.from('battle_rounds').update({status:'closed',vote_closes_at:now,winner_entry_id:winner,updated_at:now}).eq('id',roundId);if(error)throw error;
       await db.from('battle_contests').update({current_segment:'results',segment_started_at:now,current_round_id:roundId,status:'live',updated_at:now}).eq('id',contestId);
-      if(!winner)return NextResponse.json({ok:true,tie:true,votes_a:a,votes_b:b,data:await snapshot()});
+      if(!winner){
+        const state=await snapshot();
+        return NextResponse.json({ok:true,tie:true,votes_a:a,votes_b:b,...state});
+      }
     }else if(action==='finalize_contest'){
       const contestId=String(body.contestId||'');
       const [{data:rounds},{data:votes}]=await Promise.all([
@@ -137,7 +140,7 @@ export async function POST(req:Request){
       const wins=new Map<string,number>();const totals=new Map<string,number>();
       for(const round of rounds||[])if(round.winner_entry_id)wins.set(round.winner_entry_id,(wins.get(round.winner_entry_id)||0)+1);
       for(const vote of votes||[])totals.set(vote.entry_id,(totals.get(vote.entry_id)||0)+1);
-      const ids=Array.from(new Set([...(wins.keys()),...(totals.keys())]));
+      const ids=Array.from(new Set(Array.from(wins.keys()).concat(Array.from(totals.keys()))));
       ids.sort((a,b)=>(wins.get(b)||0)-(wins.get(a)||0)||(totals.get(b)||0)-(totals.get(a)||0));
       if(!ids.length)return NextResponse.json({error:'There are no completed round votes to finalize.'},{status:409});
       if(ids.length>1&&(wins.get(ids[0])||0)===(wins.get(ids[1])||0)&&(totals.get(ids[0])||0)===(totals.get(ids[1])||0))return NextResponse.json({error:'The battle is tied. Add a tiebreak round before finalizing.'},{status:409});
