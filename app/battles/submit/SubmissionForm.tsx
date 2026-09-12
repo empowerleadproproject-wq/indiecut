@@ -18,7 +18,7 @@ export default function SubmissionForm({open=true}:{open?:boolean}){
   try{
    const form=new FormData(target);const track=form.get('track_file');if(!(track instanceof File)||!track.size)throw new Error('Upload the song you want to enter.');const photo=form.get('artist_photo');setMessage('Uploading your music…');
    const track_url=await directUpload(track,'audio');const image_url=photo instanceof File&&photo.size?await directUpload(photo,'image'):'';setMessage('Sending your submission for review…');
-   const payload={artist_name:String(form.get('artist_name')||''),email:String(form.get('email')||''),phone:String(form.get('phone')||''),track_title:String(form.get('track_title')||''),genre:String(form.get('genre')||''),city:String(form.get('city')||''),social_handle:String(form.get('social_handle')||''),bio:String(form.get('bio')||''),website:String(form.get('website')||''),rights:String(form.get('rights')||'')==='yes',track_url,image_url};
+   const payload={artist_name:String(form.get('artist_name')||''),email:String(form.get('email')||''),phone:String(form.get('phone')||''),track_title:String(form.get('track_title')||''),genre:String(form.get('genre')||''),city:String(form.get('city')||''),social_handle:String(form.get('social_handle')||''),bio:String(form.get('bio')||''),website:String(form.get('website')||''),rights:String(form.get('rights')||'')==='yes',marketing_opt_in:String(form.get('marketing_opt_in')||'')==='yes',track_url,image_url};
    const r=await fetch('/api/battle-submissions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to submit your music.');setSuccess(true);setMessage('Submission received. Indie Cut will review your song inside your genre. If approved, we will activate your Phase One fan-voting profile and give you a shareable voting link.');target.reset();
   }catch(e:any){setMessage(e.message)}finally{setBusy(false)}
  }
@@ -30,6 +30,7 @@ export default function SubmissionForm({open=true}:{open?:boolean}){
   <div className={styles.formGrid}><label>Artist photo <span>optional</span><input name="artist_photo" type="file" accept="image/*"/></label><label>Upload your song<input name="track_file" type="file" accept="audio/*" required/></label></div>
   <input name="website" tabIndex={-1} autoComplete="off" className={styles.honeypot} aria-hidden="true"/>
   <label className={styles.rightsCheck}><input name="rights" value="yes" type="checkbox" required/> <span>I confirm that I own or control the rights needed to submit this recording for consideration and playback in Indie Cut Battles.</span></label>
+  <label className={styles.rightsCheck}><input name="marketing_opt_in" value="yes" type="checkbox"/> <span>Yes, send me Indie Cut artist opportunities, battle announcements and other promotional updates by email. I can unsubscribe later.</span></label>
   <button className={styles.submitMusicButton} type="submit" disabled={busy}>{busy?'UPLOADING + SUBMITTING…':'SUBMIT FOR REVIEW'}</button>
   {message&&<div className={`${styles.submissionMessage} ${success?styles.submissionSuccess:''}`}>{message}</div>}
  </form>
