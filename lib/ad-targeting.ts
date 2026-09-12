@@ -1,12 +1,12 @@
 export type VisitorGeo={country:string;region:string;city:string;postalCode:string;latitude:number|null;longitude:number|null};
+type HeaderLike={get:(name:string)=>string|null};
 
 function clean(v:any){return String(v||'').trim()}
 function upper(v:any){return clean(v).toUpperCase()}
 function numberOrNull(v:any){const n=Number(v);return Number.isFinite(n)?n:null}
 function decodeCity(v:string){try{return decodeURIComponent(v)}catch{return v}}
 
-export function visitorGeo(request:Request):VisitorGeo{
- const h=request.headers;
+export function visitorGeoFromHeaders(h:HeaderLike):VisitorGeo{
  return {
   country:upper(h.get('x-vercel-ip-country')),
   region:upper(h.get('x-vercel-ip-country-region')),
@@ -16,6 +16,7 @@ export function visitorGeo(request:Request):VisitorGeo{
   longitude:numberOrNull(h.get('x-vercel-ip-longitude'))
  };
 }
+export function visitorGeo(request:Request):VisitorGeo{return visitorGeoFromHeaders(request.headers)}
 
 export function isLocalTarget(row:any){return String(row?.target_mode||'global').toLowerCase()==='local'}
 
