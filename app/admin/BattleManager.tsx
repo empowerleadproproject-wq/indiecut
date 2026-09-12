@@ -3,7 +3,7 @@
 import {useEffect,useMemo,useState} from 'react';
 
 type Contest=any;
-const GENRES=['Hip-Hop','R&B','Gospel','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'] as const;
+const GENRES=['Hip-Hop','R&B','Gospel','Southern Soul','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'] as const;
 const emptyContest={title:'',genre:'',description:'',qualifying_starts_at:'',qualifying_ends_at:'',live_starts_at:'',vote_window_seconds:30};
 const emptyEntry={artist_name:'',genre:'',city:'',bio:'',image_url:'',track_title:'',track_url:'',track_cover_url:''};
 
