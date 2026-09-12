@@ -47,8 +47,12 @@ export default function BattleLiveClient({slug,initialData,roomSponsors=[]}:Prop
 
  if(contest.status==='qualifying')return <>
   <div className={styles.liveBar}><strong>Fan qualifying is open</strong><button className={styles.shareButton} onClick={share}>SHARE COMPETITION</button></div>
-  <section className={styles.section}><div className={styles.sectionHead}><div><div className={styles.eyebrow}>QUALIFYING</div><h2>Vote for the artist you want in the live battle</h2></div></div><div className={styles.leaderboard}>{data.entries.map((entry:any,index:number)=><div className={styles.rankRow} key={entry.id}><div className={styles.rank}>#{index+1}</div>{entry.image_url?<img className={styles.avatar} src={entry.image_url} alt=""/>:<div className={styles.avatar}/>}<div><a href={`/battles/${slug}/artists/${entry.slug}`} style={{color:'#fff',textDecoration:'none'}}><div className={styles.artistName}>{entry.artist_name}</div></a><div className={styles.small}>{entry.genre||'Independent artist'}{entry.city?` · ${entry.city}`:''}</div></div><div style={{textAlign:'right'}}><div className={styles.votes}>{entry.vote_count} votes</div><button className={styles.voteButton} disabled={voting} onClick={()=>castVote(entry.id)}>VOTE</button></div></div>)}</div>{message&&<div className={styles.notice}>{message}</div>}</section>
-  <section className={styles.section}><Bracket data={data}/></section>
+  <section className={styles.section}>
+   <div className={styles.sectionHead}><div><div className={styles.eyebrow}>QUALIFYING</div><h2>Vote for the artists you want to see advance</h2></div></div>
+   <div className={styles.leaderboard}>{data.entries.map((entry:any,index:number)=><div className={styles.rankRow} key={entry.id}><div className={styles.rank}>#{index+1}</div>{entry.image_url?<img className={styles.avatar} src={entry.image_url} alt=""/>:<div className={styles.avatar}/>}<div><a href={`/battles/${slug}/artists/${entry.slug}`} style={{color:'inherit',textDecoration:'none'}}><div className={styles.artistName}>{entry.artist_name}</div></a><div className={styles.small}>{entry.genre||'Independent artist'}{entry.city?` · ${entry.city}`:''}</div></div><div style={{textAlign:'right'}}><div className={styles.votes}>{entry.vote_count} votes</div><button className={styles.voteButton} disabled={voting} onClick={()=>castVote(entry.id)}>VOTE</button></div></div>)}</div>
+   <p style={{margin:'18px 0 0',fontSize:13,lineHeight:1.5,opacity:.65}}>You can support more than one artist, but each artist can only receive one vote from the same device or internet connection during qualifying. Top artists advance to the live battle.</p>
+   {message&&<div className={styles.notice}>{message}</div>}
+  </section>
  </>;
 
  return <>
