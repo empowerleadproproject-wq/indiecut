@@ -101,17 +101,9 @@ alter table public.battle_entries enable row level security;
 alter table public.battle_rounds enable row level security;
 alter table public.battle_votes enable row level security;
 
+-- These tables contain private studio access codes and vote-fraud hashes. They intentionally
+-- have no anon/authenticated policies. All public battle data is served through server routes,
+-- which strip studio codes/passcodes before returning it to browsers.
 drop policy if exists "public read battle contests" on public.battle_contests;
-create policy "public read battle contests" on public.battle_contests for select
-using (status <> 'draft');
-
 drop policy if exists "public read battle entries" on public.battle_entries;
-create policy "public read battle entries" on public.battle_entries for select
-using (exists(select 1 from public.battle_contests c where c.id=contest_id and c.status <> 'draft'));
-
 drop policy if exists "public read battle rounds" on public.battle_rounds;
-create policy "public read battle rounds" on public.battle_rounds for select
-using (exists(select 1 from public.battle_contests c where c.id=contest_id and c.status <> 'draft'));
-
--- Votes are intentionally not publicly readable or writable. Server routes use the service role
--- so fraud-control hashes never leave the backend.
