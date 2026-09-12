@@ -1,6 +1,7 @@
 import {NextResponse} from 'next/server';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
 import {sendTextGridSms} from '../../../../lib/textgrid';
+import {enrollMatchingWorkflows} from '../../../../lib/crm-workflows';
 
 export const dynamic='force-dynamic';
 export const maxDuration=120;
@@ -33,9 +34,9 @@ export async function GET(){
   }else if(step.step_type==='send_email'){
    if(contact.email_opt_in&&contact.email){await sendEmail(contact.email,mergeText(cfg.subject||'Indie Cut',contact),mergeText(cfg.message||'',contact));await client.from('crm_activity').insert({contact_id:contact.id,activity_type:'workflow_email',detail:`${workflow.name}: ${cfg.subject||'Email'}`});}
   }else if(step.step_type==='add_tag'){
-   const tag=String(cfg.tag||'').trim();if(tag){const tags=Array.from(new Set([...(contact.tags||[]),tag]));await client.from('crm_contacts').update({tags,updated_at:new Date().toISOString()}).eq('id',contact.id)}
+   const tag=String(cfg.tag||'').trim();if(tag){const hadTag=(contact.tags||[]).some((x:any)=>String(x).trim().toLowerCase()===tag.toLowerCase());const tags=Array.from(new Set([...(contact.tags||[]),tag]));await client.from('crm_contacts').update({tags,updated_at:new Date().toISOString()}).eq('id',contact.id);if(!hadTag)await enrollMatchingWorkflows(client,contact.id,'tag_added',{tag});}
   }else if(step.step_type==='update_status'){
-   if(cfg.status)await client.from('crm_contacts').update({status:String(cfg.status),updated_at:new Date().toISOString()}).eq('id',contact.id);
+   if(cfg.status){const nextStatus=String(cfg.status);const previousStatus=String(contact.status||'');await client.from('crm_contacts').update({status:nextStatus,updated_at:new Date().toISOString()}).eq('id',contact.id);if(previousStatus!==nextStatus)await enrollMatchingWorkflows(client,contact.id,'status_changed',{status:nextStatus,previousStatus});}
   }else if(step.step_type==='create_task'){
    if(cfg.title)await client.from('crm_tasks').insert({contact_id:contact.id,title:mergeText(cfg.title,contact),notes:mergeText(cfg.notes||'',contact)||null,status:'open',priority:String(cfg.priority||'normal'),due_at:cfg.due_hours?new Date(Date.now()+Number(cfg.due_hours)*3600000).toISOString():null});
   }
