@@ -20,7 +20,8 @@ export default async function ArtistBattleProfile({params}:{params:{slug:string;
  const raw=await getBattleBySlug(params.slug);if(!raw.contest||raw.contest.status==='draft')notFound();
  const data=serializeBattle(raw);const artist=data.entries.find((x:any)=>x.slug===params.entry);if(!artist)notFound();
  const rank=data.entries.findIndex((x:any)=>x.id===artist.id)+1;const open=isQualificationOpen(raw.contest);const voteCount=Number(artist.vote_count||0);
- const hasSocial=Boolean(artist.instagram_url||artist.tiktok_url);
+ const hasSocial=Boolean(artist.instagram_url||artist.tiktok_url||artist.youtube_url||artist.facebook_url);
+ const socialButtonStyle={display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:132,padding:'11px 16px',borderRadius:999,background:'#111',color:'#fff',textDecoration:'none',fontSize:13,fontWeight:900} as const;
  return <main className={styles.page}>
   <PublicHeader/>
   <div className={styles.wrap}>
@@ -35,8 +36,10 @@ export default async function ArtistBattleProfile({params}:{params:{slug:string;
      {hasSocial&&<div style={{margin:'18px 0 22px'}}>
       <div style={{fontSize:12,fontWeight:900,letterSpacing:'.12em',marginBottom:9}}>FOLLOW THE ARTIST</div>
       <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-       {artist.instagram_url&&<a href={artist.instagram_url} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:132,padding:'11px 16px',borderRadius:999,background:'#111',color:'#fff',textDecoration:'none',fontSize:13,fontWeight:900}}>INSTAGRAM ↗</a>}
-       {artist.tiktok_url&&<a href={artist.tiktok_url} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:132,padding:'11px 16px',borderRadius:999,background:'#111',color:'#fff',textDecoration:'none',fontSize:13,fontWeight:900}}>TIKTOK ↗</a>}
+       {artist.instagram_url&&<a href={artist.instagram_url} target="_blank" rel="noopener noreferrer" style={socialButtonStyle}>INSTAGRAM ↗</a>}
+       {artist.tiktok_url&&<a href={artist.tiktok_url} target="_blank" rel="noopener noreferrer" style={socialButtonStyle}>TIKTOK ↗</a>}
+       {artist.youtube_url&&<a href={artist.youtube_url} target="_blank" rel="noopener noreferrer" style={socialButtonStyle}>YOUTUBE ↗</a>}
+       {artist.facebook_url&&<a href={artist.facebook_url} target="_blank" rel="noopener noreferrer" style={socialButtonStyle}>FACEBOOK ↗</a>}
       </div>
       <div style={{fontSize:12,color:'#777',marginTop:8}}>Support the artist beyond the vote — follow their official social pages.</div>
      </div>}
