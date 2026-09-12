@@ -3,6 +3,7 @@ import PublicHeader from '../../../../PublicHeader';
 import PublicFooter from '../../../../PublicFooter';
 import { getBattleBySlug,isQualificationOpen,serializeBattle } from '../../../../../lib/battles';
 import ArtistVoteClient from './ArtistVoteClient';
+import BattleProfileAds from './BattleProfileAds';
 import styles from '../../../battles.module.css';
 
 export const dynamic='force-dynamic';
@@ -21,5 +22,6 @@ export default async function ArtistBattleProfile({params}:{params:{slug:string;
  return <main className={styles.page}><PublicHeader/><div className={styles.shell}>
   <a className={styles.back} href={`/battles/${params.slug}`}>← {raw.contest.title}</a>
   <section className={styles.profile}><div className={styles.profileArt}>{artist.image_url?<img src={artist.image_url} alt={artist.artist_name}/>:null}</div><div className={styles.profileInfo}><div className={styles.eyebrow}>INDIE CUT ARTIST SPOTLIGHT · CURRENT RANK #{rank}</div><h1>{artist.artist_name}</h1><div className={styles.meta}>{artist.genre&&<span>{artist.genre}</span>}{artist.city&&<span>{artist.city}</span>}<span>{artist.vote_count} fan votes</span></div>{artist.bio&&<p>{artist.bio}</p>}{artist.track_title&&<h2>{artist.track_title}</h2>}{artist.track_url&&<audio className={styles.audio} controls preload="metadata" src={artist.track_url}/>}<p><strong>Fans:</strong> share this page directly. Indie Cut counts one qualifying vote per device and internet connection to keep the competition fair.</p><ArtistVoteClient battleSlug={params.slug} entryId={artist.id} artistName={artist.artist_name} votingOpen={open}/></div></section>
+  <BattleProfileAds/>
  </div><PublicFooter/></main>
 }
