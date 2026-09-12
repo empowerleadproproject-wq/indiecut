@@ -5,6 +5,9 @@ import { battleDb,slugify } from '../../../../lib/battles';
 
 export const dynamic='force-dynamic';
 
+const GENRES=['Hip-Hop','R&B','Gospel','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'] as const;
+function normalizeGenre(value:any){const raw=String(value||'').trim().toLowerCase();return GENRES.find(g=>g.toLowerCase()===raw)||''}
+
 async function adminUser(){
   const auth=createClient();
   const {data:{user}}=await auth.auth.getUser();
@@ -51,10 +54,12 @@ export async function POST(req:Request){
     if(action==='create_contest'){
       const p=body.payload||{};
       const title=String(p.title||'').trim();
+      const genre=normalizeGenre(p.genre);
       if(!title)return NextResponse.json({error:'Battle title is required.'},{status:400});
+      if(!genre)return NextResponse.json({error:'Choose the competition genre.'},{status:400});
       const slug=slugify(p.slug||title);
       const {error}=await db.from('battle_contests').insert({
-        title,slug,description:p.description||null,status:p.status||'draft',
+        title,slug,genre,description:p.description||null,status:p.status||'draft',
         qualifying_starts_at:p.qualifying_starts_at||null,qualifying_ends_at:p.qualifying_ends_at||null,
         live_starts_at:p.live_starts_at||null,vote_window_seconds:Number(p.vote_window_seconds)||30,
         zoom_session_name:p.zoom_session_name||`indiecut-${slug}`,
@@ -65,7 +70,14 @@ export async function POST(req:Request){
       if(error)throw error;
     }else if(action==='update_contest'){
       const id=String(body.contestId||'');const p=body.payload||{};
-      const allowed=['title','slug','description','status','qualifying_starts_at','qualifying_ends_at','live_starts_at','vote_window_seconds','zoom_session_name','zoom_session_passcode','sponsor_name','sponsor_logo_url','sponsor_destination_url','commercial_url'];
+      if(Object.prototype.hasOwnProperty.call(p,'genre')){
+        const genre=normalizeGenre(p.genre);if(!genre)return NextResponse.json({error:'Choose a valid competition genre.'},{status:400});
+        const {data:entries}=await db.from('battle_entries').select('id,artist_name,genre').eq('contest_id',id);
+        const mismatch=(entries||[]).find((e:any)=>String(e.genre||'').toLowerCase()!==genre.toLowerCase());
+        if(mismatch)return NextResponse.json({error:`Cannot change this battle to ${genre} because ${mismatch.artist_name} is already entered as ${mismatch.genre||'another genre'}.`},{status:409});
+        p.genre=genre;
+      }
+      const allowed=['title','slug','genre','description','status','qualifying_starts_at','qualifying_ends_at','live_starts_at','vote_window_seconds','zoom_session_name','zoom_session_passcode','sponsor_name','sponsor_logo_url','sponsor_destination_url','commercial_url'];
       const update:any={updated_at:new Date().toISOString()};
       for(const key of allowed)if(Object.prototype.hasOwnProperty.call(p,key))update[key]=key==='slug'?slugify(p[key]):p[key]||null;
       if(Object.prototype.hasOwnProperty.call(p,'vote_window_seconds'))update.vote_window_seconds=Number(p.vote_window_seconds)||30;
@@ -73,20 +85,26 @@ export async function POST(req:Request){
     }else if(action==='add_entry'){
       const contestId=String(body.contestId||'');const p=body.payload||{};const artistName=String(p.artist_name||'').trim();
       if(!artistName)return NextResponse.json({error:'Artist name is required.'},{status:400});
+      const {data:contest}=await db.from('battle_contests').select('id,genre').eq('id',contestId).maybeSingle();
+      if(!contest)return NextResponse.json({error:'Competition not found.'},{status:404});
+      if(!contest.genre)return NextResponse.json({error:'Set the competition genre first.'},{status:400});
       const {error}=await db.from('battle_entries').insert({
         contest_id:contestId,artist_id:p.artist_id||null,artist_name:artistName,slug:slugify(p.slug||artistName),
-        genre:p.genre||null,city:p.city||null,bio:p.bio||null,image_url:p.image_url||null,
+        genre:contest.genre,city:p.city||null,bio:p.bio||null,image_url:p.image_url||null,
         track_title:p.track_title||null,track_url:p.track_url||null,track_cover_url:p.track_cover_url||null,
         seed:p.seed?Number(p.seed):null,active:p.active!==false
       });if(error)throw error;
     }else if(action==='add_round'){
       const contestId=String(body.contestId||'');const p=body.payload||{};
-      const [{data:a},{data:b},{data:existing}]=await Promise.all([
+      const [{data:contest},{data:a},{data:b},{data:existing}]=await Promise.all([
+        db.from('battle_contests').select('id,genre').eq('id',contestId).maybeSingle(),
         db.from('battle_entries').select('*').eq('id',p.entry_a_id).eq('contest_id',contestId).maybeSingle(),
         db.from('battle_entries').select('*').eq('id',p.entry_b_id).eq('contest_id',contestId).maybeSingle(),
         db.from('battle_rounds').select('round_number').eq('contest_id',contestId).order('round_number',{ascending:false}).limit(1)
       ]);
       if(!a||!b||a.id===b.id)return NextResponse.json({error:'Choose two different artists from this contest.'},{status:400});
+      if(!contest?.genre)return NextResponse.json({error:'Set the competition genre first.'},{status:400});
+      if(String(a.genre||'').toLowerCase()!==String(contest.genre).toLowerCase()||String(b.genre||'').toLowerCase()!==String(contest.genre).toLowerCase())return NextResponse.json({error:`Both artists must be ${contest.genre} artists.`},{status:400});
       const roundNumber=Number(p.round_number)||((existing?.[0]?.round_number||0)+1);
       const {data:round,error}=await db.from('battle_rounds').insert({
         contest_id:contestId,round_number:roundNumber,title:p.title||`Round ${roundNumber}`,
