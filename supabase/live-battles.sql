@@ -38,6 +38,8 @@ create table if not exists public.battle_entries (
   track_title text,
   track_url text,
   track_cover_url text,
+  instagram_url text,
+  tiktok_url text,
   studio_code text not null default encode(gen_random_bytes(16),'hex'),
   seed integer,
   active boolean not null default true,
@@ -45,6 +47,9 @@ create table if not exists public.battle_entries (
   updated_at timestamptz not null default now(),
   unique(contest_id,slug)
 );
+
+alter table public.battle_entries add column if not exists instagram_url text;
+alter table public.battle_entries add column if not exists tiktok_url text;
 
 create table if not exists public.battle_rounds (
   id uuid primary key default gen_random_uuid(),
