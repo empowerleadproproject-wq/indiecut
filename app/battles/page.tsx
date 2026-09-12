@@ -40,19 +40,24 @@ export default async function BattlesLandingPage(){
     <h1>{content.headline}</h1>
     {content.subheadline&&<p className={`${styles.landingSubhead} battle-mobile-subhead`}>{content.subheadline}</p>}
     <div className={`${styles.landingButtonOrbit} battle-mobile-orbit`}><a className={`${styles.landingPrimary} battle-mobile-primary`} href="/battles/room">{content.primary_button}</a></div>
+    <a className="battle-rankings-link" href="/battles/rankings"><span className="battle-rankings-dot"/>SEE WHERE YOUR FAVORITE ARTIST RANKS →</a>
     {content.submission_open&&<div className={`${styles.artistInvite} battle-mobile-invite`}><strong>{content.artist_prompt}</strong><span>{content.artist_copy}</span><a href="/battles/submit">{content.secondary_button} →</a></div>}
    </div>
   </section>
   <style>{`
+   .battle-rankings-link{display:inline-flex;align-items:center;justify-content:center;gap:9px;margin-top:14px;padding:11px 18px;border:1px solid rgba(255,255,255,.25);border-radius:999px;color:#fff;text-decoration:none;font-size:11px;font-weight:900;letter-spacing:.08em;background:rgba(8,8,8,.6);backdrop-filter:blur(10px);transition:.2s ease;}
+   .battle-rankings-link:hover{border-color:#e744bd;color:#fff;transform:translateY(-2px);background:rgba(231,68,189,.12);}
+   .battle-rankings-dot{width:7px;height:7px;border-radius:50%;background:#e744bd;box-shadow:0 0 0 5px rgba(231,68,189,.14);}
    @media (max-width:620px){
     .battle-mobile-shell{padding:0 14px 24px!important;}
-    .battle-mobile-hero{min-height:760px!important;display:block!important;}
+    .battle-mobile-hero{min-height:790px!important;display:block!important;}
     .battle-mobile-center{width:100%!important;max-width:100%!important;box-sizing:border-box!important;padding:230px 20px 180px!important;}
     .battle-mobile-kicker{font-size:10px!important;letter-spacing:.2em!important;margin-bottom:14px!important;white-space:nowrap;}
     .battle-mobile-center h1{font-size:36px!important;line-height:.96!important;letter-spacing:-.04em!important;max-width:340px!important;margin:0 auto 18px!important;}
     .battle-mobile-subhead{font-size:16px!important;line-height:1.45!important;max-width:320px!important;margin:0 auto 24px!important;}
     .battle-mobile-orbit{width:min(100%,320px)!important;}
     .battle-mobile-primary{display:block!important;width:100%!important;box-sizing:border-box!important;padding:16px 18px!important;font-size:13px!important;}
+    .battle-rankings-link{width:min(100%,320px);box-sizing:border-box;font-size:10px;padding:12px 12px;margin-top:12px;}
     .battle-mobile-invite{margin-top:22px!important;max-width:320px!important;font-size:14px!important;line-height:1.4!important;gap:7px!important;}
     .battle-mobile-invite strong{font-size:14px!important;}
     .battle-mobile-invite a{margin-top:6px!important;}
