@@ -61,7 +61,10 @@ export async function POST(req:Request,{params}:{params:{slug:string}}){
 
   if(error){
     if(error.code==='23505'){
-      const res=NextResponse.json({error:'A vote from this device or internet connection has already been counted for this voting window.'},{status:409});
+      const message=voteScope==='qualifying'
+        ? `You already voted for ${entry.artist_name}. You can still vote for other artists in this qualifying round.`
+        : 'A vote from this device or internet connection has already been counted for this live round.';
+      const res=NextResponse.json({error:message},{status:409});
       if(!deviceMatch)res.cookies.set('ic_vote_device',deviceId,{httpOnly:true,sameSite:'lax',secure:true,maxAge:60*60*24*365,path:'/'});
       return res;
     }
