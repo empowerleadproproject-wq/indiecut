@@ -11,7 +11,7 @@ export default function BattleSponsorRotator({sponsors=[]}:{sponsors?:any[]}){
  if(!active.length)return <section className={styles.wrap}><div className={styles.label}>ADVERTISEMENT</div><div className={styles.placeholder}><strong>SPONSOR PLACEMENT</strong><span>Battle Room sponsor creative will rotate here.</span></div></section>;
  const sponsor=active[index%active.length];
  return <section className={styles.wrap} aria-label="Battle Room sponsor">
-  <div className={styles.topline}><span className={styles.label}>ADVERTISEMENT</span><span className={styles.counter}>{active.length>1?`${index+1} / ${active.length}`:'SPONSOR'}</span></div>
+  <div className={styles.topline}><span className={styles.label}>ADVERTISEMENT</span></div>
   <a className={styles.ad} href={sponsor.destination_url||'#'} target="_blank" rel="noopener noreferrer sponsored" aria-label={sponsor.name?`Visit ${sponsor.name}`:'Visit sponsor'}>
    <img src={sponsor.image_url} alt={sponsor.name||'Battle Room sponsor'}/>
   </a>
