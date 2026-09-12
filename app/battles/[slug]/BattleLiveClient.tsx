@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect,useMemo,useRef,useState } from 'react';
+import {trackMarketingEvent} from '../../../lib/marketing-tracking';
 import ZoomStage from './ZoomStage';
 import BattleSponsorRotator from '../room/BattleSponsorRotator';
 import styles from '../battles.module.css';
@@ -41,9 +42,9 @@ export default function BattleLiveClient({slug,initialData,roomSponsors=[]}:Prop
 
  async function castVote(entryId:string){
   setVoting(true);setMessage('');
-  try{const res=await fetch(`/api/battles/${slug}/vote`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({entryId,roundId:round?.id})});const body=await res.json();if(!res.ok)throw new Error(body.error||'Vote failed');setMessage('Your vote is in.');await refresh()}catch(e:any){setMessage(e.message)}finally{setVoting(false)}
+  try{const res=await fetch(`/api/battles/${slug}/vote`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({entryId,roundId:round?.id})});const body=await res.json();if(!res.ok)throw new Error(body.error||'Vote failed');const artist=data.entries.find((x:any)=>x.id===entryId);trackMarketingEvent('BattleVote',{battle_slug:slug,entry_id:entryId,artist_name:artist?.artist_name||'',phase:contest.status,round_number:round?.round_number||0});setMessage('Your vote is in.');await refresh()}catch(e:any){setMessage(e.message)}finally{setVoting(false)}
  }
- async function share(){const url=window.location.href;try{if(navigator.share)await navigator.share({title:contest.title,url});else{await navigator.clipboard.writeText(url);setMessage('Battle link copied.')}}catch{}}
+ async function share(){const url=window.location.href;try{if(navigator.share)await navigator.share({title:contest.title,url});else{await navigator.clipboard.writeText(url);setMessage('Battle link copied.')}trackMarketingEvent('BattleShare',{battle_slug:slug,battle_title:contest.title})}catch{}}
  function enableSound(){setSound(true);if(trackRef.current&&currentTrack?.url){trackRef.current.src=currentTrack.url;trackRef.current.play().catch(()=>{})}}
  const voteCloses=round?.vote_closes_at?new Date(round.vote_closes_at).getTime():0;const seconds=voteCloses?Math.max(0,Math.ceil((voteCloses-tick)/1000)):0;
  const commercialVideo=videoExt.test(String(contest.commercial_url||''));
