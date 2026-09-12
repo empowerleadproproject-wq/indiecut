@@ -1,5 +1,6 @@
 import PublicHeader from '../../PublicHeader';
 import PublicFooter from '../../PublicFooter';
+import SitewideAd from '../../SitewideAd';
 import {battleDb} from '../../../lib/battles';
 import LeaderboardClient from './LeaderboardClient';
 import styles from './rankings.module.css';
@@ -36,8 +37,11 @@ export default async function RankingsPage(){
       <p>Choose a genre, follow the live fan standings, and tap an artist to listen, vote, and share their page to help move them up.</p>
     </section>
     <div className={styles.shell}>
-      <a className={styles.backLink} href="/battles">← BACK TO LIVE BATTLES</a>
-      <LeaderboardClient initialBoards={boards}/>
+      <div className={styles.contentColumn}>
+        <a className={styles.backLink} href="/battles">← BACK TO LIVE BATTLES</a>
+        <LeaderboardClient initialBoards={boards}/>
+      </div>
+      <div className={styles.adColumn}><SitewideAd/></div>
     </div>
     <PublicFooter/>
   </main>;
