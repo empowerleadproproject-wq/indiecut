@@ -2,13 +2,45 @@
 
 import {FormEvent,useState} from 'react';
 import {createClient} from '../../../lib/supabase/browser';
+import * as tus from 'tus-js-client';
 import styles from '../battles.module.css';
 
 const GENRES=['Hip-Hop','R&B','Gospel','Southern Soul','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'] as const;
+const RESUMABLE_THRESHOLD=6*1024*1024;
 
-async function directUpload(file:File,kind:'image'|'audio'){
+function resumableEndpoint(){
+ const base=String(process.env.NEXT_PUBLIC_SUPABASE_URL||'');
+ const match=base.match(/^https:\/\/([^.]+)\.supabase\.co/i);
+ if(!match)throw new Error('Upload service URL is unavailable.');
+ return `https://${match[1]}.storage.supabase.co/storage/v1/upload/resumable`;
+}
+
+async function resumableUpload(file:File,info:any,onProgress?:(percent:number)=>void){
+ await new Promise<void>((resolve,reject)=>{
+  const upload=new tus.Upload(file,{
+   endpoint:resumableEndpoint(),
+   retryDelays:[0,3000,5000,10000,20000],
+   headers:{'x-signature':String(info.token||'')},
+   uploadDataDuringCreation:true,
+   removeFingerprintOnSuccess:true,
+   chunkSize:6*1024*1024,
+   metadata:{bucketName:String(info.bucket||''),objectName:String(info.path||''),contentType:file.type||'application/octet-stream',cacheControl:'3600'},
+   onProgress(bytesUploaded,bytesTotal){if(bytesTotal>0)onProgress?.(Math.max(1,Math.min(100,Math.round((bytesUploaded/bytesTotal)*100))))},
+   onError(error){reject(new Error(error?.message||'The file upload was interrupted. Please try again.'))},
+   onSuccess(){resolve()}
+  });
+  upload.findPreviousUploads().then(previous=>{if(previous.length)upload.resumeFromPreviousUpload(previous[0]);upload.start()}).catch(reject);
+ });
+}
+
+async function directUpload(file:File,kind:'image'|'audio',onProgress?:(percent:number)=>void){
  const meta=await fetch('/api/battle-submissions/upload-url',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fileName:file.name,mime:file.type,size:file.size,kind})});const info=await meta.json().catch(()=>({}));if(!meta.ok)throw new Error(info.error||'Unable to prepare upload.');
- const supabase=createClient();const {error}=await supabase.storage.from(info.bucket).uploadToSignedUrl(info.path,info.token,file,{contentType:file.type});if(error)throw new Error(error.message);return String(info.publicUrl||'');
+ if(file.size>RESUMABLE_THRESHOLD){
+  await resumableUpload(file,info,onProgress);
+ }else{
+  const supabase=createClient();const {error}=await supabase.storage.from(info.bucket).uploadToSignedUrl(info.path,info.token,file,{contentType:file.type});if(error)throw new Error(error.message);
+ }
+ return String(info.publicUrl||'');
 }
 
 export default function SubmissionForm({open=true}:{open?:boolean}){
@@ -17,10 +49,12 @@ export default function SubmissionForm({open=true}:{open?:boolean}){
   e.preventDefault();if(!open)return;setBusy(true);setMessage('');setSuccess(false);const target=e.currentTarget;
   try{
    const form=new FormData(target);const track=form.get('track_file');if(!(track instanceof File)||!track.size)throw new Error('Upload the song you want to enter.');const photo=form.get('artist_photo');setMessage('Uploading your music…');
-   const track_url=await directUpload(track,'audio');const image_url=photo instanceof File&&photo.size?await directUpload(photo,'image'):'';setMessage('Sending your submission for review…');
+   const track_url=await directUpload(track,'audio',percent=>setMessage(`Uploading your music… ${percent}%`));
+   let image_url='';if(photo instanceof File&&photo.size){setMessage('Uploading your artist photo…');image_url=await directUpload(photo,'image',percent=>setMessage(`Uploading your artist photo… ${percent}%`))}
+   setMessage('Sending your submission for review…');
    const payload={artist_name:String(form.get('artist_name')||''),email:String(form.get('email')||''),phone:String(form.get('phone')||''),track_title:String(form.get('track_title')||''),genre:String(form.get('genre')||''),city:String(form.get('city')||''),instagram:String(form.get('instagram')||''),tiktok:String(form.get('tiktok')||''),bio:String(form.get('bio')||''),website:String(form.get('website')||''),rights:String(form.get('rights')||'')==='yes',marketing_opt_in:String(form.get('marketing_opt_in')||'')==='yes',track_url,image_url};
    const r=await fetch('/api/battle-submissions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to submit your music.');setSuccess(true);setMessage('Submission received. Indie Cut will review your song inside your genre. If approved, we will activate your Phase One fan-voting profile and give you a shareable voting link. Your Instagram and TikTok links will appear on the artist page so fans can follow you.');target.reset();
-  }catch(e:any){setMessage(e.message)}finally{setBusy(false)}
+  }catch(e:any){const raw=String(e?.message||'Upload failed.');setMessage(/gateway timeout|networkerror|failed to fetch/i.test(raw)?'The upload connection was interrupted. Please press Submit for Review again — large songs now resume automatically instead of restarting from zero.':raw)}finally{setBusy(false)}
  }
  if(!open)return <div className={styles.submissionClosed}><h2>Submissions are currently closed.</h2><p>Check back for the next Indie Cut Battle entry period.</p><a href="/battles">BACK TO LIVE BATTLES</a></div>;
  return <form className={styles.submissionForm} onSubmit={submit}>
