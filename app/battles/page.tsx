@@ -1,27 +1,47 @@
 import PublicHeader from '../PublicHeader';
 import PublicFooter from '../PublicFooter';
-import { battleDb } from '../../lib/battles';
+import {battleDb} from '../../lib/battles';
 import styles from './battles.module.css';
 
 export const dynamic='force-dynamic';
 export const revalidate=0;
 
-function label(status:string){return status==='qualifying'?'Fan voting open':status==='scheduled'?'Battle scheduled':status==='live'?'Live now':status==='completed'?'Battle complete':'Coming soon'}
+const defaults={
+ headline:'WHERE INDEPENDENT ARTISTS BATTLE FOR THE CROWN.',
+ subheadline:'Two artists. One stage. The fans decide who moves forward.',
+ primary_button:'ENTER THE BATTLE ROOM',
+ artist_prompt:"Independent artist? Think you've got what it takes?",
+ artist_copy:'Submit your music for a chance to compete in the next Indie Cut Battle.',
+ secondary_button:'SUBMIT YOUR MUSIC',
+ submission_open:true,
+ images:[] as string[]
+};
 
-export default async function BattlesPage(){
+async function landingData(){
  const db=battleDb();
- const [{data:contests},{data:entries},{data:votes}]=await Promise.all([
-  db.from('battle_contests').select('*').neq('status','draft').order('created_at',{ascending:false}),
-  db.from('battle_entries').select('id,contest_id,artist_name,slug,image_url,genre,city').eq('active',true),
-  db.from('battle_votes').select('contest_id,entry_id,vote_scope').eq('vote_scope','qualifying')
+ const [{data:setting},{data:articles}]=await Promise.all([
+  db.from('site_settings').select('setting_value').eq('setting_key','admin_battle_landing').maybeSingle(),
+  db.from('articles').select('featured_media_url').not('featured_media_url','is',null).order('published_at',{ascending:false,nullsFirst:false}).limit(10)
  ]);
- const rows=(contests||[]).map((contest:any)=>{
-  const people=(entries||[]).filter((e:any)=>e.contest_id===contest.id).map((entry:any)=>({...entry,vote_count:(votes||[]).filter((v:any)=>v.entry_id===entry.id).length})).sort((a:any,b:any)=>b.vote_count-a.vote_count);
-  return {...contest,people};
- });
- return <main className={styles.page}><PublicHeader/><div className={styles.shell}>
-  <section className={styles.hero}><div><div className={styles.eyebrow}>INDIE CUT LIVE</div><h1>Fans decide who moves forward.</h1><p>Discover independent artists, hear their music, vote once per competition, then come back for the live head-to-head battle. The top artists earn the spotlight — not an algorithm or a label gatekeeper.</p></div><aside className={styles.heroCard}><span className={styles.status}>LIVE BATTLES</span><strong>{rows.length}</strong><p>Active and completed Indie Cut competitions. Share an artist page, bring your people, and watch the bracket move.</p></aside></section>
-  {rows.length?<section className={styles.grid}>{rows.map((contest:any)=>{const cover=contest.people[0]?.image_url;return <a className={styles.card} href={`/battles/${contest.slug}`} key={contest.id}><div className={styles.cardMedia}>{cover?<img src={cover} alt=""/>:<strong>INDIE CUT<br/>LIVE</strong>}</div><div className={styles.cardBody}><span className={styles.status}>{label(contest.status)}</span><h2>{contest.title}</h2><div className={styles.meta}><span>{contest.people.length} artists</span>{contest.live_starts_at&&<span>{new Date(contest.live_starts_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>}</div></div></a>})}</section>:<div className={styles.empty} style={{marginTop:28}}>The first Indie Cut artist competition is being set up.</div>}
-  {rows.some((x:any)=>x.status==='qualifying')&&<section className={styles.section}><div className={styles.sectionHead}><div><div className={styles.eyebrow}>CURRENT LEADERS</div><h2>Fan vote leaderboard</h2></div></div><div className={styles.leaderboard}>{rows.filter((x:any)=>x.status==='qualifying').flatMap((contest:any)=>contest.people.slice(0,5).map((entry:any,index:number)=><a href={`/battles/${contest.slug}/artists/${entry.slug}`} className={styles.rankRow} key={`${contest.id}-${entry.id}`}><div className={styles.rank}>#{index+1}</div>{entry.image_url?<img className={styles.avatar} src={entry.image_url} alt=""/>:<div className={styles.avatar}/>}<div><div className={styles.artistName}>{entry.artist_name}</div><div className={styles.small}>{contest.title}{entry.genre?` · ${entry.genre}`:''}</div></div><div className={styles.votes}>{entry.vote_count} votes</div></a>))}</div></section>}
+ let saved:any={};try{saved=JSON.parse(setting?.setting_value||'{}')}catch{}
+ const articleImages=(articles||[]).map((x:any)=>x.featured_media_url).filter(Boolean);
+ const configured=Array.isArray(saved.images)?saved.images:[];
+ const images=Array.from({length:7},(_,i)=>configured[i]||articleImages[i]||'').filter(Boolean);
+ return {...defaults,...saved,images};
+}
+
+export default async function BattlesLandingPage(){
+ const content=await landingData();
+ return <main className={styles.landingPage}><PublicHeader/><div className={styles.landingShell}>
+  <section className={styles.landingHero}>
+   <div className={styles.landingMediaLayer}>{content.images.slice(0,7).map((src:string,i:number)=><div key={`${src}-${i}`} className={`${styles.floatingImage} ${styles[`float${i+1}` as keyof typeof styles]||''}`}><img src={src} alt=""/></div>)}</div>
+   <div className={styles.landingCenter}>
+    <div className={styles.landingKicker}>INDIE CUT LIVE BATTLES</div>
+    <h1>{content.headline}</h1>
+    {content.subheadline&&<p className={styles.landingSubhead}>{content.subheadline}</p>}
+    <div className={styles.landingButtonOrbit}><a className={styles.landingPrimary} href="/battles/room">{content.primary_button}</a></div>
+    {content.submission_open&&<div className={styles.artistInvite}><strong>{content.artist_prompt}</strong><span>{content.artist_copy}</span><a href="/battles/submit">{content.secondary_button} →</a></div>}
+   </div>
+  </section>
  </div><PublicFooter/></main>
 }
