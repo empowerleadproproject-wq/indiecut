@@ -6,10 +6,10 @@ import {isAdminEmail} from '../../../../lib/admin';
 export const maxDuration=120;
 async function adminDb(){const auth=createClient();const {data:{user}}=await auth.auth.getUser();if(!user||!isAdminEmail(user.email))return {error:NextResponse.json({error:'Unauthorized'},{status:401})};const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)return {error:NextResponse.json({error:'Supabase service credentials missing'},{status:503})};return {db:createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})};}
 const tableMap:Record<string,string>={articles:'articles',artists:'artists',music:'media_items','video-media':'media_items','media-library':'media_items'};
-const settingsSections=new Set(['advertising','authors','subscribers','homepage','settings','social-agent']);
+const settingsSections=new Set(['advertising','authors','subscribers','homepage','settings','social-agent','battle-landing']);
 function cleanSlug(v:string){return String(v||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
 function keyFor(section:string){return `admin_${section.replace(/-/g,'_')}`}
-function objectSection(section:string){return section==='homepage'||section==='settings'||section==='social-agent'}
+function objectSection(section:string){return section==='homepage'||section==='settings'||section==='social-agent'||section==='battle-landing'}
 async function readSetting(db:any,section:string){const {data,error}=await db.from('site_settings').select('setting_value').eq('setting_key',keyFor(section)).maybeSingle();if(error)return {rows:[]};try{const parsed=JSON.parse(data?.setting_value||(objectSection(section)?'{}':'[]'));return {rows:Array.isArray(parsed)?parsed:[parsed]}}catch{return {rows:[]}}}
 async function writeSetting(db:any,section:string,value:any){return db.from('site_settings').upsert({setting_key:keyFor(section),setting_value:JSON.stringify(value),updated_at:new Date().toISOString()},{onConflict:'setting_key'})}
 async function runSocialAgent(request:Request,articleId:string){try{const url=new URL('/api/social-agent/publish',request.url);const cookie=request.headers.get('cookie')||'';const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json',cookie},body:JSON.stringify({article_id:articleId})});return await r.json().catch(()=>({ok:false,error:'Social agent response unreadable'}))}catch(e:any){return {ok:false,error:e?.message||'Social agent failed'}}}
