@@ -1,6 +1,7 @@
 'use client';
 
 import {useEffect,useState} from 'react';
+import {trackMarketingEvent} from '../../../../../lib/marketing-tracking';
 import styles from './ArtistProfile.module.css';
 
 function FacebookIcon(){return <svg className={styles.shareIcon} viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M13.5 22v-8h2.7l.4-3h-3.1V9.1c0-.9.3-1.5 1.6-1.5h1.7V4.9c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4.1V11H8v3h2.4v8h3.1z"/></svg>}
@@ -12,10 +13,11 @@ function LinkIcon(){return <svg className={styles.shareIcon} viewBox="0 0 24 24"
 export default function ArtistVoteClient({battleSlug,entryId,artistName,votingOpen,initialVotes,rank}:{battleSlug:string;entryId:string;artistName:string;votingOpen:boolean;initialVotes:number;rank:number}){
  const [loading,setLoading]=useState(false);const [message,setMessage]=useState('');const [votes,setVotes]=useState(initialVotes||0);const [url,setUrl]=useState('');
  useEffect(()=>setUrl(window.location.href),[]);
- async function vote(){setLoading(true);setMessage('');try{const res=await fetch(`/api/battles/${battleSlug}/vote`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({entryId})});const body=await res.json();if(!res.ok)throw new Error(body.error||'Vote failed');setVotes(v=>v+1);setMessage(`Your vote for ${artistName} has been counted.`)}catch(e:any){setMessage(e.message)}finally{setLoading(false)}}
- async function copy(){try{await navigator.clipboard.writeText(url||window.location.href);setMessage('Voting link copied.')}catch{}}
- async function nativeShare(){try{if(navigator.share)await navigator.share({title:`Vote for ${artistName} on Indie Cut`,text:'Think this artist should advance? Share this page and help them win.',url:url||window.location.href});else await copy()}catch{}}
- function popup(href:string){window.open(href,'indiecut-artist-share','width=720,height=620,noopener,noreferrer')}
+ function recordShare(channel:string){trackMarketingEvent('ArtistShare',{channel,artist_name:artistName,battle_slug:battleSlug,entry_id:entryId})}
+ async function vote(){setLoading(true);setMessage('');try{const res=await fetch(`/api/battles/${battleSlug}/vote`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({entryId})});const body=await res.json();if(!res.ok)throw new Error(body.error||'Vote failed');setVotes(v=>v+1);trackMarketingEvent('BattleVote',{artist_name:artistName,battle_slug:battleSlug,entry_id:entryId});setMessage(`Your vote for ${artistName} has been counted.`)}catch(e:any){setMessage(e.message)}finally{setLoading(false)}}
+ async function copy(){try{await navigator.clipboard.writeText(url||window.location.href);recordShare('copy_link');setMessage('Voting link copied.')}catch{}}
+ async function nativeShare(){try{if(navigator.share){await navigator.share({title:`Vote for ${artistName} on Indie Cut`,text:'Think this artist should advance? Share this page and help them win.',url:url||window.location.href});recordShare('native_share')}else await copy()}catch{}}
+ function popup(href:string,channel:string){recordShare(channel);window.open(href,'indiecut-artist-share','width=720,height=620,noopener,noreferrer')}
  const liveUrl=url||'';const encoded=encodeURIComponent(liveUrl);const text=encodeURIComponent(`Think ${artistName} should advance? Vote and help them win on Indie Cut.`);
  return <section className={styles.voteArea}>
   <div className={styles.stats}><div className={styles.stat}><strong>{votes}</strong><span>{votes===1?'Fan vote':'Fan votes'}</span></div><div className={styles.stat}><strong>#{rank}</strong><span>Current rank</span></div></div>
@@ -26,10 +28,10 @@ export default function ArtistVoteClient({battleSlug,entryId,artistName,votingOp
    <h3 className={styles.shareTitle}>Think this artist should advance? Share this page and help them win.</h3>
    <div className={styles.shareButtons} aria-label="Share this artist voting page">
     <span className={styles.shareCaption}>Share</span>
-    <button type="button" className={`${styles.shareCircle} ${styles.facebook}`} aria-label="Share on Facebook" title="Facebook" onClick={()=>liveUrl&&popup(`https://www.facebook.com/sharer/sharer.php?u=${encoded}`)}><FacebookIcon/></button>
-    <button type="button" className={`${styles.shareCircle} ${styles.x}`} aria-label="Share on X" title="X" onClick={()=>liveUrl&&popup(`https://twitter.com/intent/tweet?url=${encoded}&text=${text}`)}><span className={styles.xMark}>X</span></button>
-    <button type="button" className={`${styles.shareCircle} ${styles.linkedin}`} aria-label="Share on LinkedIn" title="LinkedIn" onClick={()=>liveUrl&&popup(`https://www.linkedin.com/sharing/share-offsite/?url=${encoded}`)}><LinkedInIcon/></button>
-    <a className={`${styles.shareCircle} ${styles.email}`} aria-label="Share by email" title="Email" href={liveUrl?`mailto:?subject=${encodeURIComponent(`Vote for ${artistName} on Indie Cut`)}&body=${encodeURIComponent(`Think this artist should advance? Share this page and help them win.\n\n${liveUrl}`)}`:'#'}><MailIcon/></a>
+    <button type="button" className={`${styles.shareCircle} ${styles.facebook}`} aria-label="Share on Facebook" title="Facebook" onClick={()=>liveUrl&&popup(`https://www.facebook.com/sharer/sharer.php?u=${encoded}`,'facebook')}><FacebookIcon/></button>
+    <button type="button" className={`${styles.shareCircle} ${styles.x}`} aria-label="Share on X" title="X" onClick={()=>liveUrl&&popup(`https://twitter.com/intent/tweet?url=${encoded}&text=${text}`,'x')}><span className={styles.xMark}>X</span></button>
+    <button type="button" className={`${styles.shareCircle} ${styles.linkedin}`} aria-label="Share on LinkedIn" title="LinkedIn" onClick={()=>liveUrl&&popup(`https://www.linkedin.com/sharing/share-offsite/?url=${encoded}`,'linkedin')}><LinkedInIcon/></button>
+    <a className={`${styles.shareCircle} ${styles.email}`} aria-label="Share by email" title="Email" onClick={()=>recordShare('email')} href={liveUrl?`mailto:?subject=${encodeURIComponent(`Vote for ${artistName} on Indie Cut`)}&body=${encodeURIComponent(`Think this artist should advance? Share this page and help them win.\n\n${liveUrl}`)}`:'#'}><MailIcon/></a>
     <button type="button" className={`${styles.shareCircle} ${styles.copy}`} aria-label="Copy link" title="Copy link" onClick={copy}><LinkIcon/></button>
     <button type="button" className={`${styles.shareCircle} ${styles.more}`} aria-label="More sharing options" title="More" onClick={nativeShare}><ShareIcon/></button>
    </div>
