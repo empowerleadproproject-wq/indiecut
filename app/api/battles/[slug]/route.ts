@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { getBattleBySlug,serializeBattle } from '../../../../lib/battles';
 
 export const dynamic='force-dynamic';
+export const revalidate=0;
+export const fetchCache='force-no-store';
 
 export async function GET(_:Request,{params}:{params:{slug:string}}){
   const raw=await getBattleBySlug(params.slug);
-  if(!raw.contest||raw.contest.status==='draft')return NextResponse.json({error:'Battle not found'},{status:404});
+  if(!raw.contest||raw.contest.status==='draft')return NextResponse.json({error:'Battle not found'},{status:404,headers:{'cache-control':'no-store, no-cache, must-revalidate, max-age=0','pragma':'no-cache','expires':'0'}});
   const data=serializeBattle(raw);
   const contest={...data.contest};
   delete contest.host_code;
@@ -18,5 +20,5 @@ export async function GET(_:Request,{params}:{params:{slug:string}}){
   const currentRound=rounds.find((r:any)=>r.id===contest.current_round_id)||null;
   const finalists=data.finalists.map((entry:any)=>entries.find((x:any)=>x.id===entry.id)).filter(Boolean);
   const winner=data.winner?entries.find((x:any)=>x.id===data.winner.id)||null:null;
-  return NextResponse.json({contest,entries,rounds,currentRound,finalists,winner},{headers:{'cache-control':'no-store'}});
+  return NextResponse.json({contest,entries,rounds,currentRound,finalists,winner},{headers:{'cache-control':'no-store, no-cache, must-revalidate, max-age=0','pragma':'no-cache','expires':'0'}});
 }
