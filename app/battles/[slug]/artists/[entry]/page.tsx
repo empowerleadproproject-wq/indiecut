@@ -20,6 +20,7 @@ export default async function ArtistBattleProfile({params}:{params:{slug:string;
  const raw=await getBattleBySlug(params.slug);if(!raw.contest||raw.contest.status==='draft')notFound();
  const data=serializeBattle(raw);const artist=data.entries.find((x:any)=>x.slug===params.entry);if(!artist)notFound();
  const rank=data.entries.findIndex((x:any)=>x.id===artist.id)+1;const open=isQualificationOpen(raw.contest);const voteCount=Number(artist.vote_count||0);
+ const hasSocial=Boolean(artist.instagram_url||artist.tiktok_url);
  return <main className={styles.page}>
   <PublicHeader/>
   <div className={styles.wrap}>
@@ -31,6 +32,14 @@ export default async function ArtistBattleProfile({params}:{params:{slug:string;
      <h1 className={styles.name}>{artist.artist_name}</h1>
      <div className={styles.meta}>{artist.genre&&<span>{artist.genre}</span>}{artist.city&&<span>{artist.city}</span>}<span>Phase One</span></div>
      {artist.bio&&<p className={styles.bio}>{artist.bio}</p>}
+     {hasSocial&&<div style={{margin:'18px 0 22px'}}>
+      <div style={{fontSize:12,fontWeight:900,letterSpacing:'.12em',marginBottom:9}}>FOLLOW THE ARTIST</div>
+      <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+       {artist.instagram_url&&<a href={artist.instagram_url} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:132,padding:'11px 16px',borderRadius:999,background:'#111',color:'#fff',textDecoration:'none',fontSize:13,fontWeight:900}}>INSTAGRAM ↗</a>}
+       {artist.tiktok_url&&<a href={artist.tiktok_url} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:132,padding:'11px 16px',borderRadius:999,background:'#111',color:'#fff',textDecoration:'none',fontSize:13,fontWeight:900}}>TIKTOK ↗</a>}
+      </div>
+      <div style={{fontSize:12,color:'#777',marginTop:8}}>Support the artist beyond the vote — follow their official social pages.</div>
+     </div>}
      <div className={styles.trackBlock}>
       <span className={styles.overline}>NOW PLAYING</span>
       <h2 className={styles.trackTitle}>{artist.track_title||'Submitted track'}</h2>
