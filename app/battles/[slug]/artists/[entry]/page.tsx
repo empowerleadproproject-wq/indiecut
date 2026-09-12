@@ -3,8 +3,9 @@ import PublicHeader from '../../../../PublicHeader';
 import PublicFooter from '../../../../PublicFooter';
 import { getBattleBySlug,isQualificationOpen,serializeBattle } from '../../../../../lib/battles';
 import ArtistVoteClient from './ArtistVoteClient';
+import PremiumAudioPlayer from './PremiumAudioPlayer';
 import BattleProfileAds from './BattleProfileAds';
-import styles from '../../../battles.module.css';
+import styles from './ArtistProfile.module.css';
 
 export const dynamic='force-dynamic';
 export const revalidate=0;
@@ -18,10 +19,28 @@ export async function generateMetadata({params}:{params:{slug:string;entry:strin
 export default async function ArtistBattleProfile({params}:{params:{slug:string;entry:string}}){
  const raw=await getBattleBySlug(params.slug);if(!raw.contest||raw.contest.status==='draft')notFound();
  const data=serializeBattle(raw);const artist=data.entries.find((x:any)=>x.slug===params.entry);if(!artist)notFound();
- const rank=data.entries.findIndex((x:any)=>x.id===artist.id)+1;const open=isQualificationOpen(raw.contest);
- return <main className={styles.page}><PublicHeader/><div className={styles.shell}>
-  <a className={styles.back} href={`/battles/${params.slug}`}>← {raw.contest.title}</a>
-  <section className={styles.profile}><div className={styles.profileArt}>{artist.image_url?<img src={artist.image_url} alt={artist.artist_name}/>:null}</div><div className={styles.profileInfo}><div className={styles.eyebrow}>INDIE CUT ARTIST SPOTLIGHT · CURRENT RANK #{rank}</div><h1>{artist.artist_name}</h1><div className={styles.meta}>{artist.genre&&<span>{artist.genre}</span>}{artist.city&&<span>{artist.city}</span>}<span>{artist.vote_count} fan votes</span></div>{artist.bio&&<p>{artist.bio}</p>}{artist.track_title&&<h2>{artist.track_title}</h2>}{artist.track_url&&<audio className={styles.audio} controls preload="metadata" src={artist.track_url}/>}<p><strong>Fans:</strong> share this page directly. Indie Cut counts one qualifying vote per device and internet connection to keep the competition fair.</p><ArtistVoteClient battleSlug={params.slug} entryId={artist.id} artistName={artist.artist_name} votingOpen={open}/></div></section>
-  <BattleProfileAds/>
- </div><PublicFooter/></main>
+ const rank=data.entries.findIndex((x:any)=>x.id===artist.id)+1;const open=isQualificationOpen(raw.contest);const voteCount=Number(artist.vote_count||0);
+ return <main className={styles.page}>
+  <PublicHeader/>
+  <div className={styles.wrap}>
+   <a className={styles.back} href={`/battles/${params.slug}`}>← BACK TO {raw.contest.title.toUpperCase()}</a>
+   <section className={styles.hero}>
+    <div className={styles.photoFrame}>{artist.image_url?<img src={artist.image_url} alt={artist.artist_name}/>:<div className={styles.photoFallback}>INDIE CUT ARTIST</div>}</div>
+    <div className={styles.content}>
+     <div className={styles.kicker}>INDIE CUT ARTIST SPOTLIGHT</div>
+     <h1 className={styles.name}>{artist.artist_name}</h1>
+     <div className={styles.meta}>{artist.genre&&<span>{artist.genre}</span>}{artist.city&&<span>{artist.city}</span>}<span>Phase One</span></div>
+     {artist.bio&&<p className={styles.bio}>{artist.bio}</p>}
+     <div className={styles.trackBlock}>
+      <span className={styles.overline}>NOW PLAYING</span>
+      <h2 className={styles.trackTitle}>{artist.track_title||'Submitted track'}</h2>
+      {artist.track_url?<PremiumAudioPlayer src={artist.track_url}/>:<p className={styles.bio}>Audio preview unavailable.</p>}
+     </div>
+     <ArtistVoteClient battleSlug={params.slug} entryId={artist.id} artistName={artist.artist_name} votingOpen={open} initialVotes={voteCount} rank={rank}/>
+    </div>
+   </section>
+   <div className={styles.ads}><div className={styles.adDivider}>ADVERTISEMENT</div><BattleProfileAds/></div>
+  </div>
+  <PublicFooter/>
+ </main>
 }
