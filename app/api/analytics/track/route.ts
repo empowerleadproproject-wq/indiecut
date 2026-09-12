@@ -1,5 +1,7 @@
 import {NextResponse} from 'next/server';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
+import {createClient} from '../../../../lib/supabase/server';
+import {isAdminEmail} from '../../../../lib/admin';
 
 export const dynamic='force-dynamic';
 
@@ -14,6 +16,16 @@ export async function POST(request:Request){
   const path=String(input.path||'').slice(0,1000);
   if(!visitorId||!sessionId||!path||!path.startsWith('/'))return NextResponse.json({ok:false},{status:400});
   if(path.startsWith('/admin')||path.startsWith('/api'))return NextResponse.json({ok:true,ignored:true});
+
+  // Never count authenticated Indie Cut admins as audience traffic, even when they
+  // are previewing public pages. This keeps owner/testing activity out of visitors,
+  // sessions, page views, sources and page rankings.
+  try{
+   const auth=createClient();
+   const {data:{user}}=await auth.auth.getUser();
+   if(user&&isAdminEmail(user.email))return NextResponse.json({ok:true,ignored:true,reason:'admin'});
+  }catch{}
+
   const db=createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
   const {error}=await db.from('website_analytics_events').insert({
    visitor_id:visitorId,
