@@ -5,6 +5,9 @@ import styles from '../battles.module.css';
 
 type Props={slug:string,artistA:any,artistB:any};
 
+const videoLayer={width:'100%',height:'100%',position:'relative',zIndex:2} as const;
+const placeholderLayer={zIndex:1} as const;
+
 export default function ZoomStage({slug,artistA,artistB}:Props){
  const aRef=useRef<HTMLDivElement>(null);const djRef=useRef<HTMLDivElement>(null);const bRef=useRef<HTMLDivElement>(null);
  const clientRef=useRef<any>(null);const streamRef=useRef<any>(null);const qualityRef=useRef<any>(2);
@@ -51,9 +54,9 @@ export default function ZoomStage({slug,artistA,artistB}:Props){
  useEffect(()=>()=>{try{clientRef.current?.leave()}catch{}},[]);
  return <>
   <div className={styles.stage}>
-   <div className={styles.stageSlot}><div ref={aRef}/>{artistA?.image_url&&<img src={artistA.image_url} alt=""/>}<div className={styles.slotLabel}>ARTIST A · {artistA?.artist_name||'TBD'}</div></div>
-   <div className={`${styles.stageSlot} ${styles.djSlot}`}><div ref={djRef}/><div className={styles.djMark}>INDIE CUT</div><div className={styles.slotLabel}>DJ / HOST</div></div>
-   <div className={styles.stageSlot}><div ref={bRef}/>{artistB?.image_url&&<img src={artistB.image_url} alt=""/>}<div className={styles.slotLabel}>ARTIST B · {artistB?.artist_name||'TBD'}</div></div>
+   <div className={styles.stageSlot}><div ref={aRef} style={videoLayer}/>{artistA?.image_url&&<img src={artistA.image_url} alt="" style={placeholderLayer}/>}<div className={styles.slotLabel}>ARTIST A · {artistA?.artist_name||'TBD'}</div></div>
+   <div className={`${styles.stageSlot} ${styles.djSlot}`}><div ref={djRef} style={videoLayer}/><div className={styles.djMark} style={placeholderLayer}>INDIE CUT</div><div className={styles.slotLabel}>DJ / HOST</div></div>
+   <div className={styles.stageSlot}><div ref={bRef} style={videoLayer}/>{artistB?.image_url&&<img src={artistB.image_url} alt="" style={placeholderLayer}/>}<div className={styles.slotLabel}>ARTIST B · {artistB?.artist_name||'TBD'}</div></div>
   </div>
   <div className={styles.liveBar}><strong><span className={styles.liveDot}/>Custom Indie Cut live stage</strong><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{!joined&&<button className={styles.enterButton} onClick={join}>JOIN LIVE VIDEO</button>}{joined&&!audioOn&&<button className={styles.shareButton} onClick={enableAudio}>HEAR HOST AUDIO</button>}{joined&&audioOn&&<span style={{color:'#9ad8a5',fontWeight:800}}>Host audio on</span>}</div>{error&&<span style={{color:'#ff8c98',fontSize:12}}>{error}</span>}</div>
  </>
