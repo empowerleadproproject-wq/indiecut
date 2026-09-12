@@ -4,7 +4,7 @@ import {FormEvent,useState} from 'react';
 import {createClient} from '../../../lib/supabase/browser';
 import styles from '../battles.module.css';
 
-const GENRES=['Hip-Hop','R&B','Gospel','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'] as const;
+const GENRES=['Hip-Hop','R&B','Gospel','Southern Soul','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'] as const;
 
 async function directUpload(file:File,kind:'image'|'audio'){
  const meta=await fetch('/api/battle-submissions/upload-url',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fileName:file.name,mime:file.type,size:file.size,kind})});const info=await meta.json().catch(()=>({}));if(!meta.ok)throw new Error(info.error||'Unable to prepare upload.');
@@ -25,7 +25,7 @@ export default function SubmissionForm({open=true}:{open?:boolean}){
  if(!open)return <div className={styles.submissionClosed}><h2>Submissions are currently closed.</h2><p>Check back for the next Indie Cut Battle entry period.</p><a href="/battles">BACK TO LIVE BATTLES</a></div>;
  return <form className={styles.submissionForm} onSubmit={submit}>
   <div className={styles.formGrid}><label>Artist / stage name<input name="artist_name" required maxLength={120} placeholder="Your artist name"/></label><label>Email<input name="email" type="email" required maxLength={180} placeholder="you@example.com"/></label><label>Phone number<input name="phone" type="tel" required maxLength={40} placeholder="(555) 555-5555"/></label><label>Song title<input name="track_title" required maxLength={160} placeholder="Song you want to enter"/></label><label>Genre<select name="genre" required defaultValue=""><option value="" disabled>Choose your genre…</option>{GENRES.map(genre=><option key={genre} value={genre}>{genre}</option>)}</select></label><label>City<input name="city" maxLength={120} placeholder="City, State"/></label><label>Instagram / social handle<input name="social_handle" maxLength={180} placeholder="@yourhandle"/></label></div>
-  <div style={{fontSize:13,lineHeight:1.45,padding:'12px 14px',background:'#f5f5f3',border:'1px solid #ddd'}}><strong>Genre matters.</strong> Artists compete only against artists in the same genre. Hip-Hop competes with Hip-Hop, R&B with R&B, Gospel with Gospel, and so on.</div>
+  <div style={{fontSize:13,lineHeight:1.45,padding:'12px 14px',background:'#f5f5f3',border:'1px solid #ddd'}}><strong>Genre matters.</strong> Artists compete only against artists in the same genre. Hip-Hop competes with Hip-Hop, R&B with R&B, Gospel with Gospel, Southern Soul with Southern Soul, and so on.</div>
   <label>Short artist bio<textarea name="bio" rows={4} maxLength={1200} placeholder="Tell Indie Cut who you are."/></label>
   <div className={styles.formGrid}><label>Artist photo <span>optional</span><input name="artist_photo" type="file" accept="image/*"/></label><label>Upload your song<input name="track_file" type="file" accept="audio/*" required/></label></div>
   <input name="website" tabIndex={-1} autoComplete="off" className={styles.honeypot} aria-hidden="true"/>
