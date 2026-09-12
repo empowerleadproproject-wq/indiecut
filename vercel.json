@@ -9,6 +9,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/crm-automation",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/breaking-news/cron",
       "schedule": "0 13 * * *"
     },
