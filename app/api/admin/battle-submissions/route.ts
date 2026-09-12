@@ -29,6 +29,11 @@ export async function POST(request:Request){
   const fan_path=`/battles/${contest.slug}/artists/${entry.slug}`;
   rows[index]={...item,status:'approved',approved_to_contest_id:contestId,approved_to_contest_title:contest.title,battle_entry_id:entry.id,fan_path,updated_at:new Date().toISOString()};const {error:saveError}=await writeSubmissions(db,rows);if(saveError)return NextResponse.json({error:saveError.message},{status:400});return NextResponse.json({ok:true,submissions:await publicRows(db),contests:await contests(db),entry:{...entry,fan_path}});
  }
+ if(action==='update_photo'){
+  const imageUrl=String(body.image_url||'').trim();if(item.status!=='approved'||!item.battle_entry_id)return NextResponse.json({error:'Approve this artist before editing the live profile.'},{status:400});if(!imageUrl)return NextResponse.json({error:'Upload a profile image first.'},{status:400});
+  const {error:entryError}=await db.from('battle_entries').update({image_url:imageUrl,updated_at:new Date().toISOString()}).eq('id',item.battle_entry_id);if(entryError)return NextResponse.json({error:entryError.message},{status:400});
+  rows[index]={...item,image_url:imageUrl,updated_at:new Date().toISOString()};const {error:saveError}=await writeSubmissions(db,rows);if(saveError)return NextResponse.json({error:saveError.message},{status:400});return NextResponse.json({ok:true,submissions:await publicRows(db),contests:await contests(db)});
+ }
  if(action==='reject'||action==='reopen'){rows[index]={...item,status:action==='reject'?'rejected':'pending',updated_at:new Date().toISOString()};const {error}=await writeSubmissions(db,rows);if(error)return NextResponse.json({error:error.message},{status:400});return NextResponse.json({ok:true,submissions:await publicRows(db),contests:await contests(db)})}
  if(action==='delete'){rows.splice(index,1);const {error}=await writeSubmissions(db,rows);if(error)return NextResponse.json({error:error.message},{status:400});return NextResponse.json({ok:true,submissions:await publicRows(db),contests:await contests(db)})}
  return NextResponse.json({error:'Unknown action'},{status:400});
