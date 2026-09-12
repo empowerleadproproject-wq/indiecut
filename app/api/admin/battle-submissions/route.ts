@@ -3,7 +3,7 @@ import {createClient as createServiceClient} from '@supabase/supabase-js';
 import {createClient} from '../../../../lib/supabase/server';
 import {isAdminEmail} from '../../../../lib/admin';
 import {slugify} from '../../../../lib/battles';
-import {enrollWorkflowsForEvent} from '../../../../lib/crm-workflow-events';
+import {enrollMatchingWorkflows} from '../../../../lib/crm-workflows';
 
 async function adminDb(){
  const auth=createClient();const {data:{user}}=await auth.auth.getUser();if(!user||!isAdminEmail(user.email))return {error:NextResponse.json({error:'Unauthorized'},{status:401})};
@@ -30,7 +30,7 @@ export async function POST(request:Request){
   const {data:entry,error}=await db.from('battle_entries').insert({contest_id:contestId,artist_name:item.artist_name,slug,genre:item.genre,city:item.city||null,bio:item.bio||null,image_url:item.image_url||null,track_title:item.track_title||null,track_url:item.track_url||null,track_cover_url:item.image_url||null,instagram_url:item.instagram_url||null,tiktok_url:item.tiktok_url||null,active:true}).select('id,slug').single();if(error)return NextResponse.json({error:error.message},{status:400});
   const fan_path=`/battles/${contest.slug}/artists/${entry.slug}`;
   rows[index]={...item,status:'approved',approved_to_contest_id:contestId,approved_to_contest_title:contest.title,battle_entry_id:entry.id,fan_path,updated_at:new Date().toISOString()};const {error:saveError}=await writeSubmissions(db,rows);if(saveError)return NextResponse.json({error:saveError.message},{status:400});
-  try{const crmContact=await findCrmContact(db,item);if(crmContact?.id)await enrollWorkflowsForEvent(db,'battle_submission_approved',crmContact.id,{submissionId:item.id,contestId,contestTitle:contest.title,genre:item.genre,fan_path});}catch{}
+  try{const crmContact=await findCrmContact(db,item);if(crmContact?.id)await enrollMatchingWorkflows(db,crmContact.id,'battle_submission_approved',{submissionId:item.id,contestId,contestTitle:contest.title,genre:item.genre,fan_path});}catch(e){console.error('Battle approval workflow trigger failed',e)}
   return NextResponse.json({ok:true,submissions:await publicRows(db),contests:await contests(db),entry:{...entry,fan_path}});
  }
  if(action==='update_photo'){

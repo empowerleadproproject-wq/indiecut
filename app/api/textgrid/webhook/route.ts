@@ -1,6 +1,6 @@
 import {NextResponse} from 'next/server';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
-import {enrollWorkflowsForEvent} from '../../../../lib/crm-workflow-events';
+import {enrollMatchingWorkflows} from '../../../../lib/crm-workflows';
 
 export const dynamic='force-dynamic';
 function db(){return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false,autoRefreshToken:false}})}
@@ -15,6 +15,6 @@ export async function POST(request:Request){
  const upper=message.trim().toUpperCase();const stopWords=new Set(['STOP','STOPALL','UNSUBSCRIBE','CANCEL','END','QUIT','REMOVE']);const startWords=new Set(['START','UNSTOP','YES']);
  if(contactId&&stopWords.has(upper)){await client.from('crm_contacts').update({sms_opt_in:false,updated_at:new Date().toISOString()}).eq('id',contactId);await client.from('crm_activity').insert({contact_id:contactId,activity_type:'sms_opt_out',detail:`Opted out by replying ${upper}`});return NextResponse.json({ok:true,optedOut:true});}
  if(contactId&&startWords.has(upper)){await client.from('crm_contacts').update({sms_opt_in:true,updated_at:new Date().toISOString()}).eq('id',contactId);await client.from('crm_activity').insert({contact_id:contactId,activity_type:'sms_opt_in',detail:`Opted in by replying ${upper}`});}
- if(contactId){await client.from('crm_activity').insert({contact_id:contactId,activity_type:'sms_received',detail:message.slice(0,240)});await enrollWorkflowsForEvent(client,'sms_reply',contactId,{message,from,providerId});}
+ if(contactId){await client.from('crm_activity').insert({contact_id:contactId,activity_type:'sms_received',detail:message.slice(0,240)});await enrollMatchingWorkflows(client,contactId,'sms_reply',{message,from,providerId});}
  return NextResponse.json({ok:true,contactId});
 }

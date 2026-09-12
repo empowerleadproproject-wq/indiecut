@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/crm-automation",
-      "schedule": "*/15 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/breaking-news/cron",
