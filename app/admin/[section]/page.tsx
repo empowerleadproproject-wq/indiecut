@@ -19,6 +19,7 @@ import BattleRoomSponsors from '../BattleRoomSponsors';
 import BattleArtistEditor from '../BattleArtistEditor';
 import CrmManager from '../CrmManager';
 import AutomationBuilder from '../AutomationBuilder';
+import TrackingPixelsSettings from '../TrackingPixelsSettings';
 
 const sections:Record<string,{title:string;intro:string}>={
  homepage:{title:'Homepage',intro:'Control hero content, featured stories and homepage presentation.'},
@@ -37,6 +38,7 @@ const sections:Record<string,{title:string;intro:string}>={
  advertising:{title:'Advertising',intro:'Manage ad creative, placements, destination links and campaign schedules.'},
  authors:{title:'Authors & Editors',intro:'Manage editorial profiles, headshots, bios and bylines.'},
  analytics:{title:'Analytics',intro:'Review Indie Cut website audience plus live Facebook and Instagram performance.'},
+ 'tracking-pixels':{title:'Tracking & Pixels',intro:'Connect Meta, Google, TikTok and Google Tag Manager for retargeting, attribution and conversion tracking.'},
  'media-library':{title:'Media Library',intro:'Browse and add reusable image and video assets.'},
  subscribers:{title:'Email Subscribers',intro:'Manage the Indie Cut reader list.'},
  settings:{title:'Site Settings',intro:'Control publication-wide brand, navigation, footer and social settings.'}
@@ -46,6 +48,6 @@ export default async function AdminSectionPage({params}:{params:{section:string}
  const section=sections[params.section];if(!section)notFound();
  const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
  if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');
- const content=params.section==='live-battles'?<><BattleRoomSponsors/><BattleLandingSettings/><BattleSubmissionsManager/><BattleArtistEditor/><BattleManager/></>:params.section==='crm'?<CrmManager/>:params.section==='workflows'?<AutomationBuilder/>:params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='music-video-radar'?<MusicVideoRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:params.section==='advertising'?<AdvertisingManager/>:<SectionManager section={params.section}/>;
+ const content=params.section==='live-battles'?<><BattleRoomSponsors/><BattleLandingSettings/><BattleSubmissionsManager/><BattleArtistEditor/><BattleManager/></>:params.section==='crm'?<CrmManager/>:params.section==='workflows'?<AutomationBuilder/>:params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='music-video-radar'?<MusicVideoRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:params.section==='tracking-pixels'?<TrackingPixelsSettings/>:params.section==='advertising'?<AdvertisingManager/>:<SectionManager section={params.section}/>;
  return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{content}{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
 }
