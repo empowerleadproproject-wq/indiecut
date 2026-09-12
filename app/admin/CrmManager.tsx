@@ -3,7 +3,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import styles from './CrmManager.module.css';
 
-const GENRES=['Hip-Hop','R&B','Gospel','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'];
+const GENRES=['Hip-Hop','R&B','Gospel','Southern Soul','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'];
 const STATUSES=['lead','pending','approved','active','rejected','inactive'];
 const STAGES=['new','contacted','qualified','proposal','won'];
 const blankContact={artist_name:'',full_name:'',email:'',phone:'',genre:'',city:'',social_handle:'',source:'manual',status:'lead',tags:[],notes:'',email_opt_in:false,sms_opt_in:false};
