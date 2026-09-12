@@ -12,11 +12,21 @@ async function adminDb(){
   if(!url||!key)return {error:NextResponse.json({error:'Supabase service credentials missing'},{status:503})};
   return {db:createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})};
 }
-function cleanSocial(value:any,network:'instagram'|'tiktok'){
+type SocialNetwork='instagram'|'tiktok'|'youtube'|'facebook';
+function cleanSocial(value:any,network:SocialNetwork){
   const raw=String(value||'').trim();if(!raw)return null;
   const handle=raw.replace(/^@/,'').trim();
-  if(!/^https?:\/\//i.test(raw)&&/^[A-Za-z0-9._-]+$/.test(handle))return network==='instagram'?`https://www.instagram.com/${handle}/`:`https://www.tiktok.com/@${handle}`;
-  try{const u=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);const host=u.hostname.toLowerCase().replace(/^www\./,'');if(network==='instagram'&&host==='instagram.com')return u.toString();if(network==='tiktok'&&host==='tiktok.com')return u.toString()}catch{}
+  if(!/^https?:\/\//i.test(raw)&&/^[A-Za-z0-9._-]+$/.test(handle)){
+    if(network==='instagram')return `https://www.instagram.com/${handle}/`;
+    if(network==='tiktok')return `https://www.tiktok.com/@${handle}`;
+    if(network==='youtube')return `https://www.youtube.com/@${handle}`;
+    return `https://www.facebook.com/${handle}`;
+  }
+  try{
+    const u=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);const host=u.hostname.toLowerCase().replace(/^www\./,'');
+    const allowed:Record<SocialNetwork,string[]>={instagram:['instagram.com'],tiktok:['tiktok.com'],youtube:['youtube.com','youtu.be'],facebook:['facebook.com','fb.com']};
+    if(allowed[network].includes(host))return u.toString();
+  }catch{}
   return null;
 }
 
@@ -46,6 +56,8 @@ export async function POST(request:Request){
     track_cover_url:String(p.track_cover_url??existing.track_cover_url??'').trim()||null,
     instagram_url:cleanSocial(p.instagram_url??existing.instagram_url,'instagram'),
     tiktok_url:cleanSocial(p.tiktok_url??existing.tiktok_url,'tiktok'),
+    youtube_url:cleanSocial(p.youtube_url??existing.youtube_url,'youtube'),
+    facebook_url:cleanSocial(p.facebook_url??existing.facebook_url,'facebook'),
     active:p.active===undefined?existing.active:Boolean(p.active),
     updated_at:new Date().toISOString()
   };
@@ -55,6 +67,7 @@ export async function POST(request:Request){
 
   await db.from('battle_rounds').update({track_a_title:entry.track_title,track_a_url:entry.track_url,updated_at:new Date().toISOString()}).eq('entry_a_id',entryId);
   await db.from('battle_rounds').update({track_b_title:entry.track_title,track_b_url:entry.track_url,updated_at:new Date().toISOString()}).eq('entry_b_id',entryId);
+  await db.from('crm_contacts').update({instagram_url:entry.instagram_url,tiktok_url:entry.tiktok_url,youtube_url:entry.youtube_url,facebook_url:entry.facebook_url,updated_at:new Date().toISOString()}).eq('battle_entry_id',entryId);
 
   const {data:settings}=await db.from('site_settings').select('setting_value').eq('setting_key','battle_submissions').maybeSingle();
   let rows:any[]=[];
@@ -63,7 +76,7 @@ export async function POST(request:Request){
   rows=rows.map((row:any)=>{
     if(String(row.battle_entry_id||'')!==entryId)return row;
     changed=true;
-    return {...row,artist_name:entry.artist_name,city:entry.city,bio:entry.bio,image_url:entry.image_url,track_title:entry.track_title,track_url:entry.track_url,instagram_url:entry.instagram_url,tiktok_url:entry.tiktok_url,updated_at:new Date().toISOString()};
+    return {...row,artist_name:entry.artist_name,city:entry.city,bio:entry.bio,image_url:entry.image_url,track_title:entry.track_title,track_url:entry.track_url,instagram_url:entry.instagram_url,tiktok_url:entry.tiktok_url,youtube_url:entry.youtube_url,facebook_url:entry.facebook_url,updated_at:new Date().toISOString()};
   });
   if(changed)await db.from('site_settings').upsert({setting_key:'battle_submissions',setting_value:JSON.stringify(rows),updated_at:new Date().toISOString()},{onConflict:'setting_key'});
 
