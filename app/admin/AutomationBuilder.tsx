@@ -11,6 +11,7 @@ const TRIGGERS=[
  ['sms_reply','Customer Replied by SMS','Start when TextGrid receives a reply'],
  ['battle_submission_approved','Battle Submission Approved','Start after an artist is approved for Phase One']
 ];
+
 const ACTIONS=[
  ['send_sms','Send SMS','Text an opted-in contact with TextGrid','SMS'],
  ['send_email','Send Email','Send an email through Indie Cut','✉'],
@@ -19,36 +20,121 @@ const ACTIONS=[
  ['update_status','Update Status','Move the contact to another CRM status','↻'],
  ['create_task','Create Task','Create a follow-up task','✓']
 ];
+
 const GENRES=['Hip-Hop','R&B','Gospel','Southern Soul','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'];
 const STATUSES=['lead','pending','approved','active','rejected','inactive'];
 const emptyWorkflow={name:'Untitled Workflow',description:'',trigger_type:'manual',trigger_config:{},status:'draft'};
 const emptySmsTemplate={name:'',body:'',active:true};
 const emptySmsCampaign={name:'',body:'',filter_status:'',filter_genre:'',scheduled_at:''};
 
-async function request(action:string,extra:any={}){const r=await fetch('/api/admin/automation',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,...extra})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Automation request failed');return j}
+async function request(action:string,extra:any={}){
+ const r=await fetch('/api/admin/automation',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,...extra})});
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok)throw new Error(j.error||'Automation request failed');
+ return j;
+}
+
 function triggerLabel(type:string){return TRIGGERS.find(x=>x[0]===type)?.[1]||type}
 function actionMeta(type:string){return ACTIONS.find(x=>x[0]===type)||[type,type,'','•']}
-function stepSummary(step:any){const c=step.step_config||{};if(step.step_type==='send_sms')return c.message||'Compose SMS message';if(step.step_type==='send_email')return c.subject||'Compose email';if(step.step_type==='wait')return `${c.amount||1} ${c.unit||'hours'}`;if(step.step_type==='add_tag')return c.tag?`Tag: ${c.tag}`:'Choose tag';if(step.step_type==='update_status')return c.status?`Set status to ${c.status}`:'Choose status';if(step.step_type==='create_task')return c.title||'Create a follow-up task';return ''}
 function sameTag(a:any,b:any){return String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase()}
+function stepSummary(step:any){
+ const c=step.step_config||{};
+ if(step.step_type==='send_sms')return c.message||'Compose SMS message';
+ if(step.step_type==='send_email')return c.subject||'Compose email';
+ if(step.step_type==='wait')return `${c.amount||1} ${c.unit||'hours'}`;
+ if(step.step_type==='add_tag')return c.tag?`Tag: ${c.tag}`:'Choose tag';
+ if(step.step_type==='update_status')return c.status?`Set status to ${c.status}`:'Choose status';
+ if(step.step_type==='create_task')return c.title||'Create a follow-up task';
+ return '';
+}
+function fmtDateTime(value:any){
+ if(!value)return '—';
+ try{return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(value))}catch{return '—'}
+}
+function enrollmentTrigger(e:any,w:any){
+ const context=e?.context&&typeof e.context==='object'?e.context:{};
+ const type=context.trigger_type||w?.trigger_type||'';
+ if(type==='tag_added')return `Tag added: ${context.tag||w?.trigger_config?.tag||'any tag'}`;
+ if(type==='status_changed')return `Status changed to ${context.status||w?.trigger_config?.status||'selected status'}`;
+ if(type==='contact_created')return 'Contact added';
+ if(type==='sms_reply')return 'SMS reply';
+ if(type==='battle_submission_approved')return 'Battle submission approved';
+ if(type==='manual')return 'Manual enrollment';
+ return type?triggerLabel(type):'Workflow enrollment';
+}
 
 export default function AutomationBuilder(){
  const [data,setData]=useState<any>({workflows:[],steps:[],smsTemplates:[],smsCampaigns:[],contacts:[],enrollments:[],smsStats:{},integrations:{}});
  const [tab,setTab]=useState<'builder'|'sms'|'tags'|'history'>('builder');
- const [workflow,setWorkflow]=useState<any>({...emptyWorkflow});const [steps,setSteps]=useState<any[]>([]);const [selectedStep,setSelectedStep]=useState<number|null>(null);const [insertAt,setInsertAt]=useState(0);
- const [busy,setBusy]=useState('');const [message,setMessage]=useState('');
- const [smsTemplate,setSmsTemplate]=useState<any>({...emptySmsTemplate});const [smsCampaign,setSmsCampaign]=useState<any>({...emptySmsCampaign});
- const [directSms,setDirectSms]=useState({contactId:'',message:''});const [enrollContact,setEnrollContact]=useState('');
- const [tags,setTags]=useState<any[]>([]);const [newTag,setNewTag]=useState('');
- async function load(){try{const r=await fetch('/api/admin/automation',{cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error||'Unable to load automation');setData(j);if(!workflow.id&&j.workflows?.length)openWorkflow(j.workflows[0],j)}catch(e:any){setMessage(e.message)}}
- async function loadTags(){try{const r=await fetch('/api/admin/tags',{cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error||'Unable to load tags');setTags(j.tags||[])}catch(e:any){setMessage(e.message)}}
+ const [workflow,setWorkflow]=useState<any>({...emptyWorkflow});
+ const [steps,setSteps]=useState<any[]>([]);
+ const [selectedStep,setSelectedStep]=useState<number|null>(null);
+ const [insertAt,setInsertAt]=useState(0);
+ const [busy,setBusy]=useState('');
+ const [message,setMessage]=useState('');
+ const [smsTemplate,setSmsTemplate]=useState<any>({...emptySmsTemplate});
+ const [smsCampaign,setSmsCampaign]=useState<any>({...emptySmsCampaign});
+ const [directSms,setDirectSms]=useState({contactId:'',message:''});
+ const [enrollContact,setEnrollContact]=useState('');
+ const [tags,setTags]=useState<any[]>([]);
+ const [newTag,setNewTag]=useState('');
+ const [historyWorkflow,setHistoryWorkflow]=useState('');
+
+ async function load(){
+  try{
+   const r=await fetch('/api/admin/automation',{cache:'no-store'});
+   const j=await r.json();
+   if(!r.ok)throw new Error(j.error||'Unable to load automation');
+   setData(j);
+   if(!workflow.id&&j.workflows?.length)openWorkflow(j.workflows[0],j);
+  }catch(e:any){setMessage(e.message)}
+ }
+
+ async function loadTags(){
+  try{
+   const r=await fetch('/api/admin/tags',{cache:'no-store'});
+   const j=await r.json();
+   if(!r.ok)throw new Error(j.error||'Unable to load tags');
+   setTags(j.tags||[]);
+  }catch(e:any){setMessage(e.message)}
+ }
+
  useEffect(()=>{load();loadTags()},[]);
- function openWorkflow(w:any,source=data){const loaded=(source.steps||[]).filter((x:any)=>x.workflow_id===w.id).sort((a:any,b:any)=>a.step_order-b.step_order).map((x:any)=>({step_type:x.step_type,step_config:x.step_config||{}}));setWorkflow({...w,trigger_config:w.trigger_config||{}});setSteps(loaded);setSelectedStep(null);setInsertAt(loaded.length)}
+
+ function openWorkflow(w:any,source=data){
+  const loaded=(source.steps||[])
+   .filter((x:any)=>x.workflow_id===w.id)
+   .sort((a:any,b:any)=>a.step_order-b.step_order)
+   .map((x:any)=>({step_type:x.step_type,step_config:x.step_config||{}}));
+  setWorkflow({...w,trigger_config:w.trigger_config||{}});
+  setSteps(loaded);
+  setSelectedStep(null);
+  setInsertAt(loaded.length);
+ }
  function newWorkflow(){setWorkflow({...emptyWorkflow});setSteps([]);setSelectedStep(null);setInsertAt(0)}
- async function run(key:string,action:string,extra:any={}){setBusy(key);setMessage('');try{const j=await request(action,extra);setData(j);setMessage('Saved.');return j}catch(e:any){setMessage(e.message)}finally{setBusy('')}}
- async function saveWorkflow(){const j=await run('save','save_workflow',{workflow,steps});if(j){const match=(j.workflows||[]).find((x:any)=>x.name===workflow.name)||j.workflows?.[0];if(match)openWorkflow(match,j)}}
- async function publish(){if(!workflow.id){setMessage('Save the workflow before publishing it.');return}const j=await run('publish','publish_workflow',{workflowId:workflow.id,publish:workflow.status!=='published'});if(j){const next=(j.workflows||[]).find((x:any)=>x.id===workflow.id);if(next)openWorkflow(next,j)}}
+ async function run(key:string,action:string,extra:any={}){
+  setBusy(key);setMessage('');
+  try{const j=await request(action,extra);setData(j);setMessage('Saved.');return j}
+  catch(e:any){setMessage(e.message)}
+  finally{setBusy('')}
+ }
+ async function saveWorkflow(){
+  const j=await run('save','save_workflow',{workflow,steps});
+  if(j){const match=(j.workflows||[]).find((x:any)=>x.name===workflow.name)||j.workflows?.[0];if(match)openWorkflow(match,j)}
+ }
+ async function publish(){
+  if(!workflow.id){setMessage('Save the workflow before publishing it.');return}
+  const j=await run('publish','publish_workflow',{workflowId:workflow.id,publish:workflow.status!=='published'});
+  if(j){const next=(j.workflows||[]).find((x:any)=>x.id===workflow.id);if(next)openWorkflow(next,j)}
+ }
  function openActionPicker(index:number){setInsertAt(Math.max(0,Math.min(index,steps.length)));setSelectedStep(null)}
- function addStep(type:string){const config=type==='send_sms'?{message:''}:type==='send_email'?{subject:'',message:''}:type==='wait'?{amount:1,unit:'hours'}:type==='add_tag'?{tag:''}:type==='update_status'?{status:'active'}:{title:'Follow up with {{artist_name}}',notes:'',priority:'normal',due_hours:24};const index=Math.max(0,Math.min(insertAt,steps.length));const next={step_type:type,step_config:config};setSteps(v=>{const copy=[...v];copy.splice(index,0,next);return copy});setSelectedStep(index);setInsertAt(index+1)}
+ function addStep(type:string){
+  const config=type==='send_sms'?{message:''}:type==='send_email'?{subject:'',message:''}:type==='wait'?{amount:1,unit:'hours'}:type==='add_tag'?{tag:''}:type==='update_status'?{status:'active'}:{title:'Follow up with {{artist_name}}',notes:'',priority:'normal',due_hours:24};
+  const index=Math.max(0,Math.min(insertAt,steps.length));
+  const next={step_type:type,step_config:config};
+  setSteps(v=>{const copy=[...v];copy.splice(index,0,next);return copy});
+  setSelectedStep(index);setInsertAt(index+1);
+ }
  function updateStep(index:number,patch:any){setSteps(v=>v.map((s,i)=>i===index?{...s,step_config:{...(s.step_config||{}),...patch}}:s))}
  function moveStep(index:number,dir:number){setSteps(v=>{const n=index+dir;if(n<0||n>=v.length)return v;const copy=[...v];[copy[index],copy[n]]=[copy[n],copy[index]];return copy});setSelectedStep(i=>i===index?index+dir:i===index+dir?index:i)}
  function deleteStep(index:number){setSteps(v=>v.filter((_,i)=>i!==index));setSelectedStep(null);setInsertAt(i=>Math.max(0,Math.min(i,Math.max(0,steps.length-1))))}
@@ -57,33 +143,190 @@ export default function AutomationBuilder(){
  async function sendDirectSms(){if(!directSms.contactId||!directSms.message.trim())return;const j=await run('direct-sms','send_sms',{contactId:directSms.contactId,message:directSms.message});if(j)setDirectSms({contactId:'',message:''})}
  async function saveSmsTemplate(){const j=await run('sms-template','save_sms_template',{template:smsTemplate});if(j)setSmsTemplate({...emptySmsTemplate})}
  async function queueSmsCampaign(){const j=await run('sms-campaign','queue_sms_campaign',{campaign:smsCampaign});if(j)setSmsCampaign({...emptySmsCampaign})}
- async function createTag(){const name=newTag.trim();if(!name)return;setBusy('tag-create');setMessage('');try{const r=await fetch('/api/admin/tags',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'create_tag',name})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to create tag');setTags(j.tags||[]);setNewTag('');setMessage('Tag created.')}catch(e:any){setMessage(e.message)}finally{setBusy('')}}
- async function deleteTag(id:string){if(!confirm('Delete this tag?'))return;setBusy(`tag-${id}`);setMessage('');try{const r=await fetch('/api/admin/tags',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'delete_tag',id})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to delete tag');setTags(j.tags||[]);setMessage('Tag deleted.')}catch(e:any){setMessage(e.message)}finally{setBusy('')}}
- const published=workflow.status==='published';const optedContacts=useMemo(()=>(data.contacts||[]).filter((c:any)=>c.sms_opt_in&&c.phone),[data.contacts]);
+ async function createTag(){
+  const name=newTag.trim();if(!name)return;
+  setBusy('tag-create');setMessage('');
+  try{
+   const r=await fetch('/api/admin/tags',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'create_tag',name})});
+   const j=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(j.error||'Unable to create tag');
+   setTags(j.tags||[]);setNewTag('');setMessage('Tag created.');
+  }catch(e:any){setMessage(e.message)}finally{setBusy('')}
+ }
+ async function deleteTag(id:string){
+  if(!confirm('Delete this tag?'))return;
+  setBusy(`tag-${id}`);setMessage('');
+  try{
+   const r=await fetch('/api/admin/tags',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'delete_tag',id})});
+   const j=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(j.error||'Unable to delete tag');
+   setTags(j.tags||[]);setMessage('Tag deleted.');
+  }catch(e:any){setMessage(e.message)}finally{setBusy('')}
+ }
+
+ const published=workflow.status==='published';
+ const optedContacts=useMemo(()=>(data.contacts||[]).filter((c:any)=>c.sms_opt_in&&c.phone),[data.contacts]);
  const currentStep=selectedStep===null||selectedStep<0?null:steps[selectedStep];
  const insertLabel=insertAt===0?'after the trigger':insertAt>=steps.length?'at the end':`between steps ${insertAt} and ${insertAt+1}`;
+ const historyEnrollments=useMemo(()=>historyWorkflow?(data.enrollments||[]).filter((e:any)=>e.workflow_id===historyWorkflow):(data.enrollments||[]),[data.enrollments,historyWorkflow]);
+ const contactById=(id:string)=>(data.contacts||[]).find((c:any)=>c.id===id);
+ const workflowById=(id:string)=>(data.workflows||[]).find((w:any)=>w.id===id);
 
  return <section className={styles.shell}>
-  <div className={styles.topbar}><div className={styles.topTitle}><h2>Indie Cut Workflows</h2><span className={`${styles.badge} ${!data.integrations?.textgrid?styles.badgeOff:''}`}>{data.integrations?.textgrid?'TEXTGRID CONNECTED':'TEXTGRID NOT CONNECTED'}</span></div><div className={styles.tabs}><button className={`${styles.tab} ${tab==='builder'?styles.tabActive:''}`} onClick={()=>setTab('builder')}>Builder</button><button className={`${styles.tab} ${tab==='sms'?styles.tabActive:''}`} onClick={()=>setTab('sms')}>SMS</button><button className={`${styles.tab} ${tab==='tags'?styles.tabActive:''}`} onClick={()=>setTab('tags')}>Tags</button><button className={`${styles.tab} ${tab==='history'?styles.tabActive:''}`} onClick={()=>setTab('history')}>Enrollment History</button></div></div>
+  <div className={styles.topbar}>
+   <div className={styles.topTitle}>
+    <h2>Indie Cut Workflows</h2>
+    <span className={`${styles.badge} ${!data.integrations?.textgrid?styles.badgeOff:''}`}>{data.integrations?.textgrid?'TEXTGRID CONNECTED':'TEXTGRID NOT CONNECTED'}</span>
+    <button className={styles.ghost} onClick={()=>setTab('tags')}>Manage Tags</button>
+   </div>
+   <div className={styles.tabs} style={{flexWrap:'wrap'}}>
+    <button className={`${styles.tab} ${tab==='builder'?styles.tabActive:''}`} onClick={()=>setTab('builder')}>Builder</button>
+    <button className={`${styles.tab} ${tab==='tags'?styles.tabActive:''}`} onClick={()=>setTab('tags')}>Tags ({tags.length})</button>
+    <button className={`${styles.tab} ${tab==='sms'?styles.tabActive:''}`} onClick={()=>setTab('sms')}>SMS</button>
+    <button className={`${styles.tab} ${tab==='history'?styles.tabActive:''}`} onClick={()=>setTab('history')}>Enrollment History ({(data.enrollments||[]).length})</button>
+   </div>
+  </div>
+
   {message&&<div className={styles.message}>{message}</div>}
+
   {tab==='builder'&&<div className={styles.workspace}>
-   <aside className={styles.left}><div className={styles.leftHead}><strong>WORKFLOWS</strong><button className={styles.newButton} onClick={newWorkflow}>＋ New</button></div><div className={styles.workflowList}>{(data.workflows||[]).map((w:any)=><button key={w.id} className={`${styles.workflowItem} ${workflow.id===w.id?styles.workflowActive:''}`} onClick={()=>openWorkflow(w)}><span className={styles.workflowName}>{w.name}</span><span className={styles.workflowMeta}><span>{triggerLabel(w.trigger_type)}</span><span>{w.status}</span></span></button>)}{!(data.workflows||[]).length&&<div className={styles.empty}>Create your first workflow.</div>}</div></aside>
-   <main className={styles.canvasWrap}><div className={styles.canvasHead}><div><input className={styles.nameInput} value={workflow.name||''} onChange={e=>setWorkflow({...workflow,name:e.target.value})}/><div className={styles.tiny}>{published?'PUBLISHED — LIVE AUTOMATION':'DRAFT — NOT RUNNING'}</div></div><div className={styles.actions}><button className={styles.ghost} onClick={saveWorkflow}>{busy==='save'?'Saving…':'Save'}</button><button className={styles.primary} onClick={publish}>{published?'Unpublish':'Publish'}</button>{workflow.id&&<button className={styles.danger} onClick={deleteWorkflow}>Delete</button>}</div></div>
-    <div className={styles.flow}><div className={`${styles.node} ${styles.nodeTrigger}`} onClick={()=>setSelectedStep(-1)}><div className={styles.nodeHead}><div className={styles.nodeType}><span className={`${styles.icon} ${styles.triggerIcon}`}>⚡</span><div><div className={styles.nodeTitle}>Trigger</div><div className={styles.nodeSub}>{triggerLabel(workflow.trigger_type)}</div></div></div><span>•••</span></div><div className={styles.nodeBody}>{workflow.trigger_type==='sms_reply'?(workflow.trigger_config?.keyword?`Reply contains “${workflow.trigger_config.keyword}”`:'Any SMS reply'):workflow.trigger_type==='status_changed'?(workflow.trigger_config?.status?`Status becomes ${workflow.trigger_config.status}`:'Any status change'):workflow.trigger_type==='tag_added'?(workflow.trigger_config?.tag?`Tag ${workflow.trigger_config.tag} is added`:'Any tag added'):'Starts the workflow when this event occurs.'}</div></div>
+   <aside className={styles.left}>
+    <div className={styles.leftHead}><strong>WORKFLOWS</strong><button className={styles.newButton} onClick={newWorkflow}>＋ New</button></div>
+    <div className={styles.workflowList}>
+     {(data.workflows||[]).map((w:any)=><button key={w.id} className={`${styles.workflowItem} ${workflow.id===w.id?styles.workflowActive:''}`} onClick={()=>openWorkflow(w)}><span className={styles.workflowName}>{w.name}</span><span className={styles.workflowMeta}><span>{triggerLabel(w.trigger_type)}</span><span>{w.status}</span></span></button>)}
+     {!(data.workflows||[]).length&&<div className={styles.empty}>Create your first workflow.</div>}
+    </div>
+   </aside>
+
+   <main className={styles.canvasWrap}>
+    <div className={styles.canvasHead}>
+     <div><input className={styles.nameInput} value={workflow.name||''} onChange={e=>setWorkflow({...workflow,name:e.target.value})}/><div className={styles.tiny}>{published?'PUBLISHED — LIVE AUTOMATION':'DRAFT — NOT RUNNING'}</div></div>
+     <div className={styles.actions}><button className={styles.ghost} onClick={saveWorkflow}>{busy==='save'?'Saving…':'Save'}</button><button className={styles.primary} onClick={publish}>{published?'Unpublish':'Publish'}</button>{workflow.id&&<button className={styles.danger} onClick={deleteWorkflow}>Delete</button>}</div>
+    </div>
+
+    <div className={styles.flow}>
+     <div className={`${styles.node} ${styles.nodeTrigger}`} onClick={()=>setSelectedStep(-1)}>
+      <div className={styles.nodeHead}><div className={styles.nodeType}><span className={`${styles.icon} ${styles.triggerIcon}`}>⚡</span><div><div className={styles.nodeTitle}>Trigger</div><div className={styles.nodeSub}>{triggerLabel(workflow.trigger_type)}</div></div></div><span>•••</span></div>
+      <div className={styles.nodeBody}>{workflow.trigger_type==='sms_reply'?(workflow.trigger_config?.keyword?`Reply contains “${workflow.trigger_config.keyword}”`:'Any SMS reply'):workflow.trigger_type==='status_changed'?(workflow.trigger_config?.status?`Status becomes ${workflow.trigger_config.status}`:'Any status change'):workflow.trigger_type==='tag_added'?(workflow.trigger_config?.tag?`Tag ${workflow.trigger_config.tag} is added`:'Any tag added'):'Starts the workflow when this event occurs.'}</div>
+     </div>
+
      {steps.map((step:any,i:number)=>{const meta=actionMeta(step.step_type);return <div key={i} style={{width:'100%',display:'flex',flexDirection:'column',alignItems:'center'}}><div className={styles.connector}/><button className={styles.plus} title="Add an action here" aria-label={`Add action before step ${i+1}`} onClick={()=>openActionPicker(i)}>+</button><div className={styles.connector}/><div className={`${styles.node} ${styles.nodeAction}`} onClick={()=>{setSelectedStep(i);setInsertAt(i+1)}}><div className={styles.nodeHead}><div className={styles.nodeType}><span className={styles.icon}>{meta[3]}</span><div><div className={styles.nodeTitle}>{meta[1]}</div><div className={styles.nodeSub}>{stepSummary(step)}</div></div></div><div className={styles.stepTools}><button onClick={e=>{e.stopPropagation();moveStep(i,-1)}}>↑</button><button onClick={e=>{e.stopPropagation();moveStep(i,1)}}>↓</button><button onClick={e=>{e.stopPropagation();deleteStep(i)}}>×</button></div></div></div></div>})}
      <div className={styles.connector}/><button className={styles.plus} title="Add an action here" aria-label="Add action at end of workflow" onClick={()=>openActionPicker(steps.length)}>+</button><div className={styles.connector}/><div className={styles.tiny}>END</div>
     </div>
    </main>
-   <aside className={styles.right}>{selectedStep===-1?<><h3>Workflow Trigger</h3><p className={styles.muted}>Choose what starts this automation.</p><div className={styles.form}><label className={styles.label}>Trigger<select className={styles.select} value={workflow.trigger_type||'manual'} onChange={e=>setWorkflow({...workflow,trigger_type:e.target.value,trigger_config:{}})}>{TRIGGERS.map(t=><option key={t[0]} value={t[0]}>{t[1]}</option>)}</select></label>{workflow.trigger_type==='sms_reply'&&<label className={styles.label}>Optional keyword<input className={styles.input} value={workflow.trigger_config?.keyword||''} onChange={e=>setWorkflow({...workflow,trigger_config:{...workflow.trigger_config,keyword:e.target.value}})} placeholder="vote, yes, interested"/></label>}{workflow.trigger_type==='status_changed'&&<label className={styles.label}>New status<select className={styles.select} value={workflow.trigger_config?.status||''} onChange={e=>setWorkflow({...workflow,trigger_config:{...workflow.trigger_config,status:e.target.value}})}><option value="">Any status</option>{STATUSES.map(x=><option key={x}>{x}</option>)}</select></label>}{workflow.trigger_type==='tag_added'&&<label className={styles.label}>Tag<select className={styles.select} value={workflow.trigger_config?.tag||''} onChange={e=>setWorkflow({...workflow,trigger_config:{...workflow.trigger_config,tag:e.target.value}})}><option value="">Choose tag…</option>{workflow.trigger_config?.tag&&!tags.some((t:any)=>sameTag(t.name,workflow.trigger_config.tag))&&<option value={workflow.trigger_config.tag}>{workflow.trigger_config.tag}</option>}{tags.map((t:any)=><option key={t.id} value={t.name}>{t.name}</option>)}</select></label>}</div></>:currentStep?<><button className={styles.ghost} style={{marginBottom:12}} onClick={()=>openActionPicker(selectedStep!+1)}>＋ Add next action</button><StepEditor step={currentStep} tags={tags} onChange={(patch:any)=>updateStep(selectedStep!,patch)}/></>:<><h3>Add an Action</h3><p className={styles.muted}>Choose what should happen {insertLabel}. Clicking an action adds it immediately to the workflow.</p><div className={styles.sectionTitle}>MESSAGING</div><div className={styles.library}>{ACTIONS.slice(0,2).map(a=><button className={styles.libraryButton} key={a[0]} onClick={()=>addStep(a[0])}><span className={styles.icon}>{a[3]}</span><span>{a[1]}<div className={styles.tiny}>{a[2]}</div></span></button>)}</div><div className={styles.sectionTitle}>WORKFLOW</div><div className={styles.library}>{ACTIONS.slice(2).map(a=><button className={styles.libraryButton} key={a[0]} onClick={()=>addStep(a[0])}><span className={styles.icon}>{a[3]}</span><span>{a[1]}<div className={styles.tiny}>{a[2]}</div></span></button>)}</div>{workflow.id&&<><div className={styles.sectionTitle}>TEST / MANUAL ENROLL</div><label className={styles.label}>Contact<select className={styles.select} value={enrollContact} onChange={e=>setEnrollContact(e.target.value)}><option value="">Choose contact…</option>{(data.contacts||[]).map((c:any)=><option key={c.id} value={c.id}>{c.artist_name||c.full_name||c.email||c.phone}</option>)}</select></label><button className={styles.primary} style={{marginTop:8}} disabled={!enrollContact} onClick={enroll}>Enroll Contact</button></>}</>}</aside>
+
+   <aside className={styles.right}>
+    {selectedStep===-1?<>
+     <h3>Workflow Trigger</h3><p className={styles.muted}>Choose what starts this automation.</p>
+     <div className={styles.form}>
+      <label className={styles.label}>Trigger<select className={styles.select} value={workflow.trigger_type||'manual'} onChange={e=>setWorkflow({...workflow,trigger_type:e.target.value,trigger_config:{}})}>{TRIGGERS.map(t=><option key={t[0]} value={t[0]}>{t[1]}</option>)}</select></label>
+      {workflow.trigger_type==='sms_reply'&&<label className={styles.label}>Optional keyword<input className={styles.input} value={workflow.trigger_config?.keyword||''} onChange={e=>setWorkflow({...workflow,trigger_config:{...workflow.trigger_config,keyword:e.target.value}})} placeholder="vote, yes, interested"/></label>}
+      {workflow.trigger_type==='status_changed'&&<label className={styles.label}>New status<select className={styles.select} value={workflow.trigger_config?.status||''} onChange={e=>setWorkflow({...workflow,trigger_config:{...workflow.trigger_config,status:e.target.value}})}><option value="">Any status</option>{STATUSES.map(x=><option key={x}>{x}</option>)}</select></label>}
+      {workflow.trigger_type==='tag_added'&&<label className={styles.label}>Tag<select className={styles.select} value={workflow.trigger_config?.tag||''} onChange={e=>setWorkflow({...workflow,trigger_config:{...workflow.trigger_config,tag:e.target.value}})}><option value="">Choose tag…</option>{workflow.trigger_config?.tag&&!tags.some((t:any)=>sameTag(t.name,workflow.trigger_config.tag))&&<option value={workflow.trigger_config.tag}>{workflow.trigger_config.tag}</option>}{tags.map((t:any)=><option key={t.id} value={t.name}>{t.name}</option>)}</select></label>}
+     </div>
+    </>:currentStep?<>
+     <button className={styles.ghost} style={{marginBottom:12}} onClick={()=>openActionPicker(selectedStep!+1)}>＋ Add next action</button>
+     <StepEditor step={currentStep} tags={tags} onChange={(patch:any)=>updateStep(selectedStep!,patch)}/>
+    </>:<>
+     <h3>Add an Action</h3><p className={styles.muted}>Choose what should happen {insertLabel}. Clicking an action adds it immediately to the workflow.</p>
+     <div className={styles.sectionTitle}>MESSAGING</div><div className={styles.library}>{ACTIONS.slice(0,2).map(a=><button className={styles.libraryButton} key={a[0]} onClick={()=>addStep(a[0])}><span className={styles.icon}>{a[3]}</span><span>{a[1]}<div className={styles.tiny}>{a[2]}</div></span></button>)}</div>
+     <div className={styles.sectionTitle}>WORKFLOW</div><div className={styles.library}>{ACTIONS.slice(2).map(a=><button className={styles.libraryButton} key={a[0]} onClick={()=>addStep(a[0])}><span className={styles.icon}>{a[3]}</span><span>{a[1]}<div className={styles.tiny}>{a[2]}</div></span></button>)}</div>
+     {workflow.id&&<><div className={styles.sectionTitle}>TEST / MANUAL ENROLL</div><label className={styles.label}>Contact<select className={styles.select} value={enrollContact} onChange={e=>setEnrollContact(e.target.value)}><option value="">Choose contact…</option>{(data.contacts||[]).map((c:any)=><option key={c.id} value={c.id}>{c.artist_name||c.full_name||c.email||c.phone}</option>)}</select></label><button className={styles.primary} style={{marginTop:8}} disabled={!enrollContact} onClick={enroll}>Enroll Contact</button></>}
+    </>}
+   </aside>
   </div>}
-  {tab==='sms'&&<div className={styles.smsGrid}><div className={styles.panel}><h3>Direct Text Message</h3><p className={styles.muted}>Send a one-to-one SMS to an opted-in artist through TextGrid.</p><label className={styles.label}>Contact<select className={styles.select} value={directSms.contactId} onChange={e=>setDirectSms({...directSms,contactId:e.target.value})}><option value="">Choose opted-in contact…</option>{optedContacts.map((c:any)=><option key={c.id} value={c.id}>{c.artist_name||c.full_name||c.phone} · {c.phone}</option>)}</select></label><label className={styles.label}>Message<textarea className={styles.textarea} rows={6} value={directSms.message} onChange={e=>setDirectSms({...directSms,message:e.target.value})} placeholder="Hey {{artist_name}}, voting is now open…"/></label><button className={styles.primary} disabled={!data.integrations?.textgrid||!directSms.contactId||!directSms.message.trim()} onClick={sendDirectSms}>{busy==='direct-sms'?'Sending…':'Send Text'}</button>{!data.integrations?.textgrid&&<div className={styles.message}>Add TEXTGRID_ACCOUNT_SID, TEXTGRID_AUTH_TOKEN and TEXTGRID_FROM_NUMBER in Vercel to activate sending.</div>}</div>
-   <div className={styles.panel}><h3>SMS Templates</h3><label className={styles.label}>Template name<input className={styles.input} value={smsTemplate.name||''} onChange={e=>setSmsTemplate({...smsTemplate,name:e.target.value})}/></label><label className={styles.label}>Message<textarea className={styles.textarea} rows={5} value={smsTemplate.body||''} onChange={e=>setSmsTemplate({...smsTemplate,body:e.target.value})}/></label><button className={styles.primary} onClick={saveSmsTemplate}>Save Template</button><div style={{marginTop:14}}>{(data.smsTemplates||[]).map((t:any)=><div className={styles.row} key={t.id}><div><strong>{t.name}</strong><div className={styles.tiny}>{t.body}</div></div><div className={styles.actions}><button className={styles.ghost} onClick={()=>setSmsTemplate({...t})}>Edit</button><button className={styles.danger} onClick={()=>run(`del-${t.id}`,'delete_sms_template',{templateId:t.id})}>Delete</button></div></div>)}</div></div>
-   <div className={styles.panel}><h3>SMS Campaign</h3><p className={styles.muted}>Only contacts with SMS opt-in are eligible.</p><label className={styles.label}>Campaign name<input className={styles.input} value={smsCampaign.name||''} onChange={e=>setSmsCampaign({...smsCampaign,name:e.target.value})}/></label><label className={styles.label}>Use template<select className={styles.select} value="" onChange={e=>{const t=(data.smsTemplates||[]).find((x:any)=>x.id===e.target.value);if(t)setSmsCampaign({...smsCampaign,body:t.body})}}><option value="">Choose template…</option>{(data.smsTemplates||[]).map((t:any)=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label className={styles.label}>Message<textarea className={styles.textarea} rows={5} value={smsCampaign.body||''} onChange={e=>setSmsCampaign({...smsCampaign,body:e.target.value})}/></label><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}><label className={styles.label}>Status<select className={styles.select} value={smsCampaign.filter_status||''} onChange={e=>setSmsCampaign({...smsCampaign,filter_status:e.target.value})}><option value="">All statuses</option>{STATUSES.map(x=><option key={x}>{x}</option>)}</select></label><label className={styles.label}>Genre<select className={styles.select} value={smsCampaign.filter_genre||''} onChange={e=>setSmsCampaign({...smsCampaign,filter_genre:e.target.value})}><option value="">All genres</option>{GENRES.map(x=><option key={x}>{x}</option>)}</select></label></div><label className={styles.label}>Send at<input className={styles.input} type="datetime-local" value={smsCampaign.scheduled_at||''} onChange={e=>setSmsCampaign({...smsCampaign,scheduled_at:e.target.value})}/></label><button className={styles.primary} onClick={queueSmsCampaign}>Queue SMS Campaign</button></div>
-   <div className={styles.panel}><div className={styles.statGrid}><div className={styles.stat}><b>{data.smsStats?.queued||0}</b><span>Queued</span></div><div className={styles.stat}><b>{data.smsStats?.sent||0}</b><span>Sent</span></div><div className={styles.stat}><b>{data.smsStats?.failed||0}</b><span>Failed</span></div></div><h3>Campaign History</h3>{(data.smsCampaigns||[]).map((c:any)=><div className={styles.row} key={c.id}><div><strong>{c.name}</strong><div className={styles.tiny}>{c.status} · {c.sent_count||0} sent · {c.failed_count||0} failed</div></div><span className={styles.tiny}>{c.scheduled_at?new Date(c.scheduled_at).toLocaleString():'—'}</span></div>)}</div>
+
+  {tab==='tags'&&<div className={styles.smsGrid}>
+   <div className={styles.panel} style={{gridColumn:'1 / -1'}}>
+    <h3>CRM Tags</h3>
+    <p className={styles.muted}>Create a tag here once. It will then appear in the Tag Added trigger and Add Tag action dropdowns inside every workflow.</p>
+    <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) auto',gap:10,maxWidth:620}}>
+     <input className={styles.input} value={newTag} onChange={e=>setNewTag(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();createTag()}}} placeholder="e.g. live-battles, finalist, VIP"/>
+     <button className={styles.primary} disabled={!newTag.trim()||busy==='tag-create'} onClick={createTag}>{busy==='tag-create'?'Creating…':'Create Tag'}</button>
+    </div>
+    <div style={{marginTop:18}}>
+     {tags.map((t:any)=><div className={styles.row} key={t.id}><div><strong>{t.name}</strong><div className={styles.tiny}>Available in workflow tag dropdowns</div></div><button className={styles.danger} disabled={busy===`tag-${t.id}`} onClick={()=>deleteTag(t.id)}>Delete</button></div>)}
+     {!tags.length&&<div className={styles.empty}>No tags yet.</div>}
+    </div>
+   </div>
   </div>}
-  {tab==='tags'&&<div className={styles.smsGrid}><div className={styles.panel} style={{gridColumn:'1 / -1'}}><h3>CRM Tags</h3><p className={styles.muted}>Create tags once, then choose them from dropdowns in workflow triggers and Add Tag actions. Create one tag at a time.</p><div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) auto',gap:10,maxWidth:620}}><input className={styles.input} value={newTag} onChange={e=>setNewTag(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();createTag()}}} placeholder="e.g. live-battles, finalist, VIP"/><button className={styles.primary} disabled={!newTag.trim()||busy==='tag-create'} onClick={createTag}>{busy==='tag-create'?'Creating…':'Create Tag'}</button></div><div style={{marginTop:18}}>{tags.map((t:any)=><div className={styles.row} key={t.id}><div><strong>{t.name}</strong><div className={styles.tiny}>Available in workflow tag dropdowns</div></div><button className={styles.danger} disabled={busy===`tag-${t.id}`} onClick={()=>deleteTag(t.id)}>Delete</button></div>)}{!tags.length&&<div className={styles.empty}>No tags yet.</div>}</div></div></div>}
-  {tab==='history'&&<div className={styles.smsGrid}><div className={styles.panel} style={{gridColumn:'1 / -1'}}><h3>Workflow Enrollment History</h3>{(data.enrollments||[]).map((e:any)=><div className={styles.row} key={e.id}><div><strong>{(data.workflows||[]).find((w:any)=>w.id===e.workflow_id)?.name||'Workflow'}</strong><div className={styles.tiny}>{(data.contacts||[]).find((c:any)=>c.id===e.contact_id)?.artist_name||(data.contacts||[]).find((c:any)=>c.id===e.contact_id)?.full_name||'Contact'} · step {Number(e.current_step||0)+1}</div>{e.last_error&&<div className={styles.tiny} style={{color:'#b42318'}}>{e.last_error}</div>}</div><span className={styles.badge}>{e.status}</span></div>)}{!(data.enrollments||[]).length&&<div className={styles.empty}>No workflow enrollments yet.</div>}</div></div>}
+
+  {tab==='sms'&&<div className={styles.smsGrid}>
+   <div className={styles.panel}>
+    <h3>Direct Text Message</h3><p className={styles.muted}>Send a one-to-one SMS to an opted-in artist through TextGrid.</p>
+    <label className={styles.label}>Contact<select className={styles.select} value={directSms.contactId} onChange={e=>setDirectSms({...directSms,contactId:e.target.value})}><option value="">Choose opted-in contact…</option>{optedContacts.map((c:any)=><option key={c.id} value={c.id}>{c.artist_name||c.full_name||c.phone} · {c.phone}</option>)}</select></label>
+    <label className={styles.label}>Message<textarea className={styles.textarea} rows={6} value={directSms.message} onChange={e=>setDirectSms({...directSms,message:e.target.value})} placeholder="Hey {{artist_name}}, voting is now open…"/></label>
+    <button className={styles.primary} disabled={!data.integrations?.textgrid||!directSms.contactId||!directSms.message.trim()} onClick={sendDirectSms}>{busy==='direct-sms'?'Sending…':'Send Text'}</button>
+    {!data.integrations?.textgrid&&<div className={styles.message}>Add TEXTGRID_ACCOUNT_SID, TEXTGRID_AUTH_TOKEN and TEXTGRID_FROM_NUMBER in Vercel to activate sending.</div>}
+   </div>
+   <div className={styles.panel}>
+    <h3>SMS Templates</h3>
+    <label className={styles.label}>Template name<input className={styles.input} value={smsTemplate.name||''} onChange={e=>setSmsTemplate({...smsTemplate,name:e.target.value})}/></label>
+    <label className={styles.label}>Message<textarea className={styles.textarea} rows={5} value={smsTemplate.body||''} onChange={e=>setSmsTemplate({...smsTemplate,body:e.target.value})}/></label>
+    <button className={styles.primary} onClick={saveSmsTemplate}>Save Template</button>
+    <div style={{marginTop:14}}>{(data.smsTemplates||[]).map((t:any)=><div className={styles.row} key={t.id}><div><strong>{t.name}</strong><div className={styles.tiny}>{t.body}</div></div><div className={styles.actions}><button className={styles.ghost} onClick={()=>setSmsTemplate({...t})}>Edit</button><button className={styles.danger} onClick={()=>run(`del-${t.id}`,'delete_sms_template',{templateId:t.id})}>Delete</button></div></div>)}</div>
+   </div>
+   <div className={styles.panel}>
+    <h3>SMS Campaign</h3><p className={styles.muted}>Only contacts with SMS opt-in are eligible.</p>
+    <label className={styles.label}>Campaign name<input className={styles.input} value={smsCampaign.name||''} onChange={e=>setSmsCampaign({...smsCampaign,name:e.target.value})}/></label>
+    <label className={styles.label}>Use template<select className={styles.select} value="" onChange={e=>{const t=(data.smsTemplates||[]).find((x:any)=>x.id===e.target.value);if(t)setSmsCampaign({...smsCampaign,body:t.body})}}><option value="">Choose template…</option>{(data.smsTemplates||[]).map((t:any)=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+    <label className={styles.label}>Message<textarea className={styles.textarea} rows={5} value={smsCampaign.body||''} onChange={e=>setSmsCampaign({...smsCampaign,body:e.target.value})}/></label>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}><label className={styles.label}>Status<select className={styles.select} value={smsCampaign.filter_status||''} onChange={e=>setSmsCampaign({...smsCampaign,filter_status:e.target.value})}><option value="">All statuses</option>{STATUSES.map(x=><option key={x}>{x}</option>)}</select></label><label className={styles.label}>Genre<select className={styles.select} value={smsCampaign.filter_genre||''} onChange={e=>setSmsCampaign({...smsCampaign,filter_genre:e.target.value})}><option value="">All genres</option>{GENRES.map(x=><option key={x}>{x}</option>)}</select></label></div>
+    <label className={styles.label}>Send at<input className={styles.input} type="datetime-local" value={smsCampaign.scheduled_at||''} onChange={e=>setSmsCampaign({...smsCampaign,scheduled_at:e.target.value})}/></label>
+    <button className={styles.primary} onClick={queueSmsCampaign}>Queue SMS Campaign</button>
+   </div>
+   <div className={styles.panel}>
+    <div className={styles.statGrid}><div className={styles.stat}><b>{data.smsStats?.queued||0}</b><span>Queued</span></div><div className={styles.stat}><b>{data.smsStats?.sent||0}</b><span>Sent</span></div><div className={styles.stat}><b>{data.smsStats?.failed||0}</b><span>Failed</span></div></div>
+    <h3>Campaign History</h3>{(data.smsCampaigns||[]).map((c:any)=><div className={styles.row} key={c.id}><div><strong>{c.name}</strong><div className={styles.tiny}>{c.status} · {c.sent_count||0} sent · {c.failed_count||0} failed</div></div><span className={styles.tiny}>{c.scheduled_at?new Date(c.scheduled_at).toLocaleString():'—'}</span></div>)}
+   </div>
+  </div>}
+
+  {tab==='history'&&<div className={styles.smsGrid}>
+   <div className={styles.panel} style={{gridColumn:'1 / -1'}}>
+    <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,flexWrap:'wrap',marginBottom:12}}>
+     <div><h3 style={{marginBottom:4}}>Workflow Enrollment History</h3><p className={styles.muted} style={{margin:0}}>See exactly who entered each workflow, why they entered it, and whether the workflow completed.</p></div>
+     <label className={styles.label} style={{minWidth:260}}>Workflow<select className={styles.select} value={historyWorkflow} onChange={e=>setHistoryWorkflow(e.target.value)}><option value="">All workflows</option>{(data.workflows||[]).map((w:any)=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
+    </div>
+
+    {historyEnrollments.map((e:any)=>{
+     const c=contactById(e.contact_id);
+     const w=workflowById(e.workflow_id);
+     const name=c?.artist_name||c?.full_name||c?.email||c?.phone||'Unknown contact';
+     const tagText=Array.isArray(c?.tags)&&c.tags.length?c.tags.join(', '):'No tags';
+     return <div key={e.id} style={{borderTop:'1px solid #eef0f3',padding:'16px 0',display:'grid',gridTemplateColumns:'minmax(0,1fr) auto',gap:18,alignItems:'start'}}>
+      <div>
+       <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}><strong style={{fontSize:15}}>{name}</strong><span className={styles.badge}>{e.status}</span></div>
+       <div style={{fontWeight:800,fontSize:12,marginTop:6}}>{w?.name||'Workflow'}</div>
+       <div className={styles.muted} style={{marginTop:5}}>{enrollmentTrigger(e,w)}</div>
+       <div className={styles.tiny} style={{marginTop:8}}>{c?.email||'No email'}{c?.phone?` · ${c.phone}`:''}</div>
+       <div className={styles.tiny} style={{marginTop:4}}>Tags: {tagText}</div>
+       {e.last_error&&<div className={styles.tiny} style={{color:'#b42318',marginTop:6}}>Error: {e.last_error}</div>}
+      </div>
+      <div style={{textAlign:'right',minWidth:180}}>
+       <div className={styles.tiny}>ENROLLED</div><div style={{fontSize:12,fontWeight:700,marginTop:3}}>{fmtDateTime(e.created_at)}</div>
+       <div className={styles.tiny} style={{marginTop:10}}>LAST UPDATED</div><div style={{fontSize:12,fontWeight:700,marginTop:3}}>{fmtDateTime(e.updated_at)}</div>
+       <div className={styles.tiny} style={{marginTop:10}}>STEP</div><div style={{fontSize:12,fontWeight:700,marginTop:3}}>{Number(e.current_step||0)} completed</div>
+      </div>
+     </div>
+    })}
+    {!historyEnrollments.length&&<div className={styles.empty}>No workflow enrollments match this filter.</div>}
+   </div>
+  </div>}
  </section>
 }
 
-function StepEditor({step,tags,onChange}:{step:any;tags:any[];onChange:(patch:any)=>void}){const c=step.step_config||{};return <><h3>{actionMeta(step.step_type)[1]}</h3><p className={styles.muted}>{actionMeta(step.step_type)[2]}</p><div className={styles.form}>{step.step_type==='send_sms'&&<label className={styles.label}>SMS message<textarea className={styles.textarea} rows={7} value={c.message||''} onChange={e=>onChange({message:e.target.value})} placeholder="Hey {{artist_name}}, your voting page is live…"/></label>}{step.step_type==='send_email'&&<><label className={styles.label}>Subject<input className={styles.input} value={c.subject||''} onChange={e=>onChange({subject:e.target.value})}/></label><label className={styles.label}>Email message<textarea className={styles.textarea} rows={7} value={c.message||''} onChange={e=>onChange({message:e.target.value})}/></label></>}{step.step_type==='wait'&&<><label className={styles.label}>Amount<input className={styles.input} type="number" min="1" value={c.amount||1} onChange={e=>onChange({amount:Number(e.target.value)})}/></label><label className={styles.label}>Unit<select className={styles.select} value={c.unit||'hours'} onChange={e=>onChange({unit:e.target.value})}><option>minutes</option><option>hours</option><option>days</option></select></label></>}{step.step_type==='add_tag'&&<label className={styles.label}>Tag<select className={styles.select} value={c.tag||''} onChange={e=>onChange({tag:e.target.value})}><option value="">Choose tag…</option>{c.tag&&!tags.some((t:any)=>sameTag(t.name,c.tag))&&<option value={c.tag}>{c.tag}</option>}{tags.map((t:any)=><option key={t.id} value={t.name}>{t.name}</option>)}</select></label>}{step.step_type==='update_status'&&<label className={styles.label}>New status<select className={styles.select} value={c.status||'active'} onChange={e=>onChange({status:e.target.value})}>{STATUSES.map(x=><option key={x}>{x}</option>)}</select></label>}{step.step_type==='create_task'&&<><label className={styles.label}>Task title<input className={styles.input} value={c.title||''} onChange={e=>onChange({title:e.target.value})}/></label><label className={styles.label}>Notes<textarea className={styles.textarea} rows={4} value={c.notes||''} onChange={e=>onChange({notes:e.target.value})}/></label><label className={styles.label}>Due in hours<input className={styles.input} type="number" min="0" value={c.due_hours||24} onChange={e=>onChange({due_hours:Number(e.target.value)})}/></label></>}<div className={styles.tiny}>Merge fields: {'{{artist_name}}'}, {'{{first_name}}'}, {'{{genre}}'}, {'{{city}}'}</div></div></>}
+function StepEditor({step,tags,onChange}:{step:any;tags:any[];onChange:(patch:any)=>void}){
+ const c=step.step_config||{};
+ return <>
+  <h3>{actionMeta(step.step_type)[1]}</h3><p className={styles.muted}>{actionMeta(step.step_type)[2]}</p>
+  <div className={styles.form}>
+   {step.step_type==='send_sms'&&<label className={styles.label}>SMS message<textarea className={styles.textarea} rows={7} value={c.message||''} onChange={e=>onChange({message:e.target.value})} placeholder="Hey {{artist_name}}, your voting page is live…"/></label>}
+   {step.step_type==='send_email'&&<><label className={styles.label}>Subject<input className={styles.input} value={c.subject||''} onChange={e=>onChange({subject:e.target.value})}/></label><label className={styles.label}>Email message<textarea className={styles.textarea} rows={7} value={c.message||''} onChange={e=>onChange({message:e.target.value})}/></label></>}
+   {step.step_type==='wait'&&<><label className={styles.label}>Amount<input className={styles.input} type="number" min="1" value={c.amount||1} onChange={e=>onChange({amount:Number(e.target.value)})}/></label><label className={styles.label}>Unit<select className={styles.select} value={c.unit||'hours'} onChange={e=>onChange({unit:e.target.value})}><option>minutes</option><option>hours</option><option>days</option></select></label></>}
+   {step.step_type==='add_tag'&&<label className={styles.label}>Tag<select className={styles.select} value={c.tag||''} onChange={e=>onChange({tag:e.target.value})}><option value="">Choose tag…</option>{c.tag&&!tags.some((t:any)=>sameTag(t.name,c.tag))&&<option value={c.tag}>{c.tag}</option>}{tags.map((t:any)=><option key={t.id} value={t.name}>{t.name}</option>)}</select></label>}
+   {step.step_type==='update_status'&&<label className={styles.label}>New status<select className={styles.select} value={c.status||'active'} onChange={e=>onChange({status:e.target.value})}>{STATUSES.map(x=><option key={x}>{x}</option>)}</select></label>}
+   {step.step_type==='create_task'&&<><label className={styles.label}>Task title<input className={styles.input} value={c.title||''} onChange={e=>onChange({title:e.target.value})}/></label><label className={styles.label}>Notes<textarea className={styles.textarea} rows={4} value={c.notes||''} onChange={e=>onChange({notes:e.target.value})}/></label><label className={styles.label}>Due in hours<input className={styles.input} type="number" min="0" value={c.due_hours||24} onChange={e=>onChange({due_hours:Number(e.target.value)})}/></label></>}
+   <div className={styles.tiny}>Merge fields: {'{{artist_name}}'}, {'{{first_name}}'}, {'{{genre}}'}, {'{{city}}'}</div>
+  </div>
+ </>
+}
