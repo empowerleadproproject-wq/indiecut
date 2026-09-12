@@ -22,7 +22,7 @@ const sections:Record<string,{title:string;intro:string}>={
  articles:{title:'Articles',intro:'Create, edit, verify and publish Indie Cut stories with uploaded media.'},
  artists:{title:'Artists & People',intro:'Manage actors, musicians, filmmakers, creators and emerging talent.'},
  music:{title:'Music',intro:'Add songs, releases, performances and music media.'},
- 'live-battles':{title:'Live Battles',intro:'Control the Live Battles front door, artist submissions, Battle Room sponsors, fan qualifying, the three-person stage, sponsor breaks, round votes and bracket results.'},
+ 'live-battles':{title:'Live Battles',intro:'Control the Live Battles front door, Battle Room sponsor ads, artist submissions, fan qualifying, the three-person stage, sponsor breaks, round votes and bracket results.'},
  'independent-music':{title:'Independent Music Radar',intro:'Discover trending independent R&B, hip-hop, soul, Afrobeats and other emerging urban artists using live web signals.'},
  'music-video-radar':{title:'Music Video Radar',intro:'Find newly released official music videos from independent and major artists, preview them, and publish them to Indie Cut Watch.'},
  'video-media':{title:'Video & Media',intro:'Upload video and photography for stories, artists and homepage placements.'},
@@ -41,6 +41,6 @@ export default async function AdminSectionPage({params}:{params:{section:string}
  const section=sections[params.section];if(!section)notFound();
  const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
  if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');
- const content=params.section==='live-battles'?<><BattleLandingSettings/><BattleSubmissionsManager/><BattleRoomSponsors/><BattleManager/></>:params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='music-video-radar'?<MusicVideoRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:params.section==='advertising'?<AdvertisingManager/>:<SectionManager section={params.section}/>;
+ const content=params.section==='live-battles'?<><BattleRoomSponsors/><BattleLandingSettings/><BattleSubmissionsManager/><BattleManager/></>:params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='music-video-radar'?<MusicVideoRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:params.section==='advertising'?<AdvertisingManager/>:<SectionManager section={params.section}/>;
  return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{content}{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
 }
