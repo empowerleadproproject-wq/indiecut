@@ -5,13 +5,26 @@ import {useEffect,useState} from 'react';
 export default function WebsiteAnalytics(){
  const [data,setData]=useState<any>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [range,setRange]=useState('today'),[source,setSource]=useState('all'),[path,setPath]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
- async function load(){setBusy(true);setError('');try{const q=new URLSearchParams({range,source});if(path)q.set('path',path);if(range==='custom'){if(start)q.set('start',start);if(end)q.set('end',end)}const r=await fetch(`/api/admin/website-analytics?${q}`,{cache:'no-store'});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to load website analytics');setData(j)}catch(e:any){setError(e.message)}finally{setBusy(false)}}
+ async function load(){
+  setBusy(true);setError('');
+  try{
+   const q=new URLSearchParams({range,source});
+   if(path)q.set('path',path);
+   if(range==='custom'){if(start)q.set('start',start);if(end)q.set('end',end)}
+   try{const ownVisitor=localStorage.getItem('ic_visitor_id');if(ownVisitor)q.set('exclude_visitor',ownVisitor)}catch{}
+   const r=await fetch(`/api/admin/website-analytics?${q}`,{cache:'no-store'});
+   const j=await r.json().catch(()=>({}));
+   if(!r.ok)throw new Error(j.error||'Unable to load website analytics');
+   setData(j);
+  }catch(e:any){setError(e.message)}finally{setBusy(false)}
+ }
  useEffect(()=>{load()},[]);
  const metric=(v:any)=>v==null?'—':Number(v).toLocaleString();
  const cards=(p:any)=><div className="ic-grid"><article className="ic-stat-card"><strong>{metric(p?.visitors)}</strong><span>Unique Visitors</span></article><article className="ic-stat-card"><strong>{metric(p?.sessions)}</strong><span>Sessions</span></article><article className="ic-stat-card"><strong>{metric(p?.page_views)}</strong><span>Page Views</span></article></div>;
  const table=(title:string,rows:any[])=><div style={{marginTop:22}}><h3>{title}</h3><div style={{display:'grid',gap:8}}>{(rows||[]).map((r:any,i:number)=><div key={`${r.label}-${i}`} style={{display:'flex',justifyContent:'space-between',gap:20,borderBottom:'1px solid #eee',padding:'8px 0'}}><span style={{overflowWrap:'anywhere'}}>{r.label}</span><strong>{metric(r.count)}</strong></div>)}</div>{(!rows||!rows.length)&&<p><small>No data for this filter.</small></p>}</div>;
  return <section className="ic-module-panel" style={{marginBottom:24}}>
-  <div className="ic-admin-eyebrow">WEBSITE AUDIENCE</div><h2>Indie Cut Website Traffic</h2><p>First-party traffic analytics for IndieCut itself. Today uses the calendar day in Eastern Time — not the previous 24 hours.</p>
+  <div className="ic-admin-eyebrow">WEBSITE AUDIENCE</div><h2>Indie Cut Website Traffic</h2><p>First-party traffic analytics for IndieCut itself. Today uses the calendar day in Eastern Time — not the previous 24 hours. Logged-in admin traffic is excluded.</p>
+  {data?.admin_browser_excluded&&<div className="ic-message" style={{marginTop:12}}>Your current browser is excluded from visitors, sessions, page views and traffic-source reporting.</div>}
   <div style={{display:'flex',flexWrap:'wrap',gap:10,alignItems:'end',margin:'18px 0'}}>
    <label><small>DATE RANGE</small><br/><select value={range} onChange={e=>setRange(e.target.value)}><option value="today">Today</option><option value="7d">Last 7 Days</option><option value="30d">Last 30 Days</option><option value="custom">Custom</option></select></label>
    {range==='custom'&&<><label><small>FROM</small><br/><input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label><label><small>TO</small><br/><input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label></>}
