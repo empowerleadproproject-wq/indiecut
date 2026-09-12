@@ -5,7 +5,7 @@ import { battleDb,slugify } from '../../../../lib/battles';
 
 export const dynamic='force-dynamic';
 
-const GENRES=['Hip-Hop','R&B','Gospel','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'] as const;
+const GENRES=['Hip-Hop','R&B','Gospel','Southern Soul','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'] as const;
 function normalizeGenre(value:any){const raw=String(value||'').trim().toLowerCase();return GENRES.find(g=>g.toLowerCase()===raw)||''}
 
 async function adminUser(){
