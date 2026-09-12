@@ -22,6 +22,7 @@ export default async function ArtistBattleProfile({params}:{params:{slug:string;
  const rank=data.entries.findIndex((x:any)=>x.id===artist.id)+1;const open=isQualificationOpen(raw.contest);const voteCount=Number(artist.vote_count||0);
  const hasSocial=Boolean(artist.instagram_url||artist.tiktok_url||artist.youtube_url||artist.facebook_url);
  const socialButtonStyle={display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:132,padding:'11px 16px',borderRadius:999,background:'#111',color:'#fff',textDecoration:'none',fontSize:13,fontWeight:900} as const;
+ const instagramButtonStyle={...socialButtonStyle,background:'linear-gradient(135deg,#feda75 0%,#fa7e1e 24%,#d62976 52%,#962fbf 76%,#4f5bd5 100%)',boxShadow:'0 8px 24px rgba(214,41,118,.38)',border:'1px solid rgba(255,255,255,.18)'} as const;
  return <main className={styles.page}>
   <PublicHeader/>
   <div className={styles.wrap}>
@@ -36,7 +37,7 @@ export default async function ArtistBattleProfile({params}:{params:{slug:string;
      {hasSocial&&<div style={{margin:'18px 0 22px'}}>
       <div style={{fontSize:12,fontWeight:900,letterSpacing:'.12em',marginBottom:9}}>FOLLOW THE ARTIST</div>
       <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-       {artist.instagram_url&&<a href={artist.instagram_url} target="_blank" rel="noopener noreferrer" style={socialButtonStyle}>INSTAGRAM ↗</a>}
+       {artist.instagram_url&&<a href={artist.instagram_url} target="_blank" rel="noopener noreferrer" style={instagramButtonStyle}>INSTAGRAM ↗</a>}
        {artist.tiktok_url&&<a href={artist.tiktok_url} target="_blank" rel="noopener noreferrer" style={socialButtonStyle}>TIKTOK ↗</a>}
        {artist.youtube_url&&<a href={artist.youtube_url} target="_blank" rel="noopener noreferrer" style={socialButtonStyle}>YOUTUBE ↗</a>}
        {artist.facebook_url&&<a href={artist.facebook_url} target="_blank" rel="noopener noreferrer" style={socialButtonStyle}>FACEBOOK ↗</a>}
