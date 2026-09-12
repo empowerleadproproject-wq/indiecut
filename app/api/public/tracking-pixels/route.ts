@@ -9,12 +9,12 @@ const DEFAULTS={meta_enabled:false,meta_pixel_id:'',ga4_enabled:false,ga4_measur
 export async function GET(){
  try{
   const auth=createClient();const {data:{user}}=await auth.auth.getUser();
-  if(user&&isAdminEmail(user.email))return NextResponse.json({...DEFAULTS,disabled_for_admin:true},{headers:{'cache-control':'no-store'}});
+  const isAdmin=Boolean(user&&isAdminEmail(user.email));
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if(!url||!key)return NextResponse.json(DEFAULTS,{headers:{'cache-control':'no-store'}});
+  if(!url||!key)return NextResponse.json({...DEFAULTS,is_admin:isAdmin},{headers:{'cache-control':'no-store'}});
   const db=createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
   const {data}=await db.from('site_settings').select('setting_value').eq('setting_key','tracking_pixels').maybeSingle();
   let value:any={};try{value=JSON.parse(data?.setting_value||'{}')}catch{}
-  return NextResponse.json({...DEFAULTS,...value},{headers:{'cache-control':'no-store, max-age=0'}});
+  return NextResponse.json({...DEFAULTS,...value,is_admin:isAdmin},{headers:{'cache-control':'no-store, max-age=0'}});
  }catch{return NextResponse.json(DEFAULTS,{headers:{'cache-control':'no-store'}})}
 }
