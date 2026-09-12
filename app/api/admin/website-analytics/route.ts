@@ -46,6 +46,7 @@ export async function GET(req:NextRequest){
  const range=params.get('range')||'30d';
  const sourceFilter=params.get('source')||'all';
  const pathFilter=params.get('path')||'';
+ const excludeVisitor=String(params.get('exclude_visitor')||'').slice(0,200);
  const startParam=params.get('start'),endParam=params.get('end');
  let start:Date,end=new Date();
  if(range==='today')start=easternMidnightUtc(0);
@@ -55,7 +56,7 @@ export async function GET(req:NextRequest){
  const queryStart=easternMidnightUtc(29);
  const {data,error}=await db.from('website_analytics_events').select('visitor_id,session_id,path,page_title,referrer,article_slug,created_at').gte('created_at',queryStart.toISOString()).lte('created_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(10000);
  if(error)return NextResponse.json({error:error.message},{status:500});
- const all=data||[];
+ const all=(data||[]).filter((r:any)=>!excludeVisitor||String(r.visitor_id)!==excludeVisitor);
  const between=(a:Date,b:Date)=>all.filter((r:any)=>{const t=new Date(r.created_at).getTime();return t>=a.getTime()&&t<=b.getTime()});
  const today=between(easternMidnightUtc(0),new Date());
  const week=between(easternMidnightUtc(6),new Date());
@@ -75,5 +76,5 @@ export async function GET(req:NextRequest){
  const recent=rows.slice(0,30).map((r:any)=>({path:r.path,page_title:r.page_title,source:source(r.referrer),created_at:r.created_at,article_slug:r.article_slug}));
  const articleSources=countBy(rows.filter((r:any)=>r.article_slug),r=>`${source(r.referrer)} → ${String(r.path||'/').split('?')[0]}`).filter(x=>!x.label.startsWith('Internal →')).slice(0,20);
  const availableSources=Array.from(new Set(month.map((r:any)=>source(r.referrer)).filter(x=>x!=='Internal'))).sort();
- return NextResponse.json({generated_at:new Date().toISOString(),timezone:'America/New_York',today:{page_views:today.length,visitors:uniq(today,'visitor_id'),sessions:uniq(today,'session_id')},last_7_days:{page_views:week.length,visitors:uniq(week,'visitor_id'),sessions:uniq(week,'session_id')},last_30_days:{page_views:month.length,visitors:uniq(month,'visitor_id'),sessions:uniq(month,'session_id')},selected:{range,start:start.toISOString(),end:end.toISOString(),page_views:rows.length,visitors:uniq(rows,'visitor_id'),sessions:uniq(rows,'session_id')},top_pages:topPages,traffic_sources:sources,article_sources:articleSources,entry_pages:entries,visitor_paths:paths,recent_activity:recent,available_sources:availableSources});
+ return NextResponse.json({generated_at:new Date().toISOString(),timezone:'America/New_York',admin_browser_excluded:Boolean(excludeVisitor),today:{page_views:today.length,visitors:uniq(today,'visitor_id'),sessions:uniq(today,'session_id')},last_7_days:{page_views:week.length,visitors:uniq(week,'visitor_id'),sessions:uniq(week,'session_id')},last_30_days:{page_views:month.length,visitors:uniq(month,'visitor_id'),sessions:uniq(month,'session_id')},selected:{range,start:start.toISOString(),end:end.toISOString(),page_views:rows.length,visitors:uniq(rows,'visitor_id'),sessions:uniq(rows,'session_id')},top_pages:topPages,traffic_sources:sources,article_sources:articleSources,entry_pages:entries,visitor_paths:paths,recent_activity:recent,available_sources:availableSources});
 }
