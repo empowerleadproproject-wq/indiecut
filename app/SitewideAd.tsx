@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react';
 
-type Ad={advertiser?:string;title?:string;creative_url?:string;destination_url?:string;placement?:string};
+type Ad={advertiser?:string;title?:string;creative_url?:string;destination_url?:string;placement?:string;_audience_scope?:'local'|'global'};
 function isVideo(url?:string){return Boolean(url&&/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url))}
 function shuffled<T>(items:T[]){const copy=[...items];for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}return copy}
 
@@ -11,14 +11,19 @@ export default function SitewideAd(){
 
   useEffect(()=>{
     let cancelled=false;
-    fetch('/api/public/ads',{cache:'no-store'})
+    fetch(`/api/public/ads?placement=right-rail&t=${Date.now()}`,{cache:'no-store'})
       .then(r=>r.json())
       .then(j=>{if(!cancelled)setAds(Array.isArray(j?.ads)?j.ads:[])})
       .catch(()=>{});
     return()=>{cancelled=true};
   },[]);
 
-  const visibleAds=useMemo(()=>shuffled(ads.filter(ad=>Boolean(ad?.creative_url))).slice(0,4),[ads]);
+  const visibleAds=useMemo(()=>{
+    const rows=ads.filter(ad=>Boolean(ad?.creative_url));
+    const local=shuffled(rows.filter(ad=>ad._audience_scope==='local'));
+    const global=shuffled(rows.filter(ad=>ad._audience_scope!=='local'));
+    return [...local,...global].slice(0,4);
+  },[ads]);
   if(!visibleAds.length)return null;
 
   return <aside className="ic-article-ad-rail" aria-label="Advertisements">
