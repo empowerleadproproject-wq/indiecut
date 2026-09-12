@@ -10,6 +10,7 @@ const modules=[
  {slug:'artists',label:'Artists & People',description:'Manage actors, musicians, filmmakers, creators and emerging talent profiles.'},
  {slug:'music',label:'Music',description:'Add songs, performances, releases, covers and artist media.'},
  {slug:'live-battles',label:'Live Battles',description:'Run artist qualifying, fan voting, live DJ battles, sponsor breaks, brackets and winners.'},
+ {slug:'crm',label:'Artist CRM',description:'Collect and manage artist names, emails, phone numbers, genres, locations, notes, campaigns and GoHighLevel sync.'},
  {slug:'live-battles#battle-room-sponsors',label:'Battle Room Sponsors',description:'Upload the rotating sponsor ads shown inside the Indie Battle Room and set each sponsor destination link.'},
  {slug:'independent-music',label:'Independent Music Radar',description:'Find trending independent R&B, hip-hop, soul, Afrobeats and other emerging urban artists.'},
  {slug:'music-video-radar',label:'Music Video Radar',description:'Find official new music videos from independent and major artists, preview them, and publish them to Watch.'},
@@ -48,7 +49,7 @@ export default async function AdminPage(){
    <form action="/api/auth/signout" method="post"><button className="ic-signout" type="submit">Sign out</button></form>
   </aside>
   <section className="ic-admin-main">
-   <header className="ic-admin-topbar"><div><div className="ic-admin-eyebrow">INDIE CUT EDITORIAL</div><h1>Back Office</h1><p>Run the entire entertainment publication from one control room: stories, artists, music, video, live battles, advertising, AI research, social publishing, audience and settings.</p></div><div className="ic-admin-user"><span>CF</span><div><strong>Administrator</strong><br/><small>{user.email}</small></div></div></header>
+   <header className="ic-admin-topbar"><div><div className="ic-admin-eyebrow">INDIE CUT EDITORIAL</div><h1>Back Office</h1><p>Run the entire entertainment publication from one control room: stories, artists, music, video, live battles, artist relationships, advertising, AI research, social publishing, audience and settings.</p></div><div className="ic-admin-user"><span>CF</span><div><strong>Administrator</strong><br/><small>{user.email}</small></div></div></header>
    <section className="ic-admin-stats"><article><span>Published stories</span><strong>{published||0}</strong><small>Live editorial content</small></article><article><span>Artists & people</span><strong>{artists||0}</strong><small>Talent profiles in your database</small></article><article><span>Media assets</span><strong>{media||0}</strong><small>Music, images and video</small></article><article><span>Active ads</span><strong>{adCount}</strong><small>Current ad inventory</small></article></section>
    <div className="ic-admin-section-head"><div><div className="ic-admin-eyebrow">CONTROL CENTER</div><h2>Manage Indie Cut</h2></div><Link className="ic-view-site" href="/">View live publication ↗</Link></div>
    <section className="ic-admin-modules">{modules.map(m=><Link className="ic-admin-module" href={`/admin/${m.slug}`} key={m.slug}><div className="ic-admin-icon">IC</div><h3>{m.label}</h3><p>{m.description}</p><span>Open →</span></Link>)}</section>
