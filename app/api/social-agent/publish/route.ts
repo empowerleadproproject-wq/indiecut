@@ -5,11 +5,12 @@ import {isAdminEmail} from '../../../../lib/admin';
 
 export const dynamic='force-dynamic';
 export const maxDuration=120;
-const SITE_URL=(process.env.NEXT_PUBLIC_SITE_URL||'https://indiecut.vercel.app').replace(/\/$/,'');
+const SITE_URL=(process.env.NEXT_PUBLIC_SITE_URL||'https://indiecut.info').replace(/\/$/,'');
 const GRAPH='https://graph.facebook.com/v23.0';
 function textFromResponse(json:any){if(typeof json?.output_text==='string')return json.output_text;const parts:string[]=[];for(const item of json?.output||[]){for(const c of item?.content||[]){if(typeof c?.text==='string')parts.push(c.text)}}return parts.join('\n').trim()}
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
-const isVideoUrl=(url:string)=>/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
+const isVideoUrl=(url:string)=>/\.(mp4|webm|mov|m4v)(\?|$)/i.test(String(url||''));
+const isHttp=(url:string)=>/^https?:\/\//i.test(String(url||''));
 
 async function waitForInstagramContainer(id:string,token:string){
  for(let i=0;i<40;i++){
@@ -43,30 +44,69 @@ async function postFacebook(article:any,caption:string,link:string,connection:Me
  return r.ok?{ok:true,id:j.id}:{ok:false,reason:j?.error?.message||'Facebook post failed'};
 }
 
-async function postInstagram(article:any,music:any,caption:string,link:string,connection:MetaConnection){
+async function ensureMediaBucket(db:any){
+ const bucket='indiecut-media';
+ try{
+  const {data:buckets}=await db.storage.listBuckets();
+  if(!(buckets||[]).some((b:any)=>b.name===bucket))await db.storage.createBucket(bucket,{public:true,fileSizeLimit:524288000});
+ }catch{}
+ return bucket;
+}
+
+async function materializeInstagramCard(db:any,article:any,origin:string){
+ const featured=String(article.featured_media_url||'').trim();
+ const fallback=isHttp(featured)&&!isVideoUrl(featured)?featured:'';
+ try{
+  const cardUrl=`${origin.replace(/\/$/,'')}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}&v=${Date.now()}`;
+  const card=await fetch(cardUrl,{cache:'no-store'});
+  const type=String(card.headers.get('content-type')||'').split(';')[0].toLowerCase();
+  if(!card.ok||!type.startsWith('image/'))return fallback;
+  const bytes=new Uint8Array(await card.arrayBuffer());
+  if(bytes.length<1000)return fallback;
+  const bucket=await ensureMediaBucket(db);
+  const ext=type.includes('jpeg')?'jpg':type.includes('webp')?'webp':'png';
+  const path=`social/${article.id}/${Date.now()}.${ext}`;
+  const {error}=await db.storage.from(bucket).upload(path,bytes,{contentType:type,upsert:false,cacheControl:'3600'});
+  if(error)return fallback;
+  const {data:pub}=db.storage.from(bucket).getPublicUrl(path);
+  return String(pub?.publicUrl||fallback);
+ }catch{return fallback}
+}
+
+async function postInstagram(article:any,music:any,caption:string,link:string,connection:MetaConnection,db:any,origin:string){
  const ig=connection.instagram_user_id||process.env.INSTAGRAM_USER_ID;
  const token=connection.facebook_page_access_token||process.env.META_PAGE_ACCESS_TOKEN;
  if(!ig||!token)return {ok:false,reason:'Instagram not connected'};
  const featured=String(article.featured_media_url||'').trim();
- const musicMedia=String(music?.media_url||music?.spotify||music?.cover_url||'').trim();
- const source=featured||musicMedia;
- if(!/^https?:\/\//i.test(source))return {ok:false,reason:'Instagram auto-post requires public article or linked music media'};
- let finalCaption=`${caption}${link&&!caption.includes(link)?`\n\n${link}`:''}`;
+ const leadVideo=String(article.lead_video_url||'').trim();
+ const musicMedia=String(music?.media_url||'').trim();
  const spotify=String(music?.spotify||'').trim();
- if(spotify&&/^https?:\/\//i.test(spotify)&&!finalCaption.includes(spotify))finalCaption+=`\n\nListen on Spotify: ${spotify}`;
- const video=isVideoUrl(featured||String(music?.media_url||''));
- const createBody=video
-  ? new URLSearchParams({access_token:token,media_type:'REELS',video_url:featured||String(music?.media_url||''),caption:finalCaption,share_to_feed:'true'})
-  : new URLSearchParams({access_token:token,image_url:`${SITE_URL}/api/social-agent/instagram-image?article_id=${encodeURIComponent(article.id)}&v=${Date.now()}`,caption:finalCaption});
+ let finalCaption=`${caption}${link&&!caption.includes(link)?`\n\n${link}`:''}`;
+ if(spotify&&isHttp(spotify)&&!finalCaption.includes(spotify))finalCaption+=`\n\nListen on Spotify: ${spotify}`;
+
+ // Instagram Graph can publish a Reel only from a direct public video file URL.
+ // YouTube/watch-page links stay embedded in the Indie Cut article; social falls back to the branded story card.
+ const directVideo=[leadVideo,featured,musicMedia].find(v=>isHttp(v)&&isVideoUrl(v))||'';
+ let createBody:URLSearchParams;
+ let postType:'reel'|'image'='image';
+ if(directVideo){
+  postType='reel';
+  createBody=new URLSearchParams({access_token:token,media_type:'REELS',video_url:directVideo,caption:finalCaption,share_to_feed:'true'});
+ }else{
+  const image=await materializeInstagramCard(db,article,origin);
+  if(!image)return {ok:false,reason:'Instagram could not create a public story image for this article'};
+  createBody=new URLSearchParams({access_token:token,image_url:image,caption:finalCaption});
+ }
+
  const c=await fetch(`${GRAPH}/${ig}/media`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:createBody});
  const cj=await c.json().catch(()=>({}));
- if(!c.ok||!cj.id)return {ok:false,reason:cj?.error?.message||`Instagram ${video?'Reel':'media'} creation failed`};
+ if(!c.ok||!cj.id)return {ok:false,reason:cj?.error?.message||`Instagram ${postType==='reel'?'Reel':'media'} creation failed`};
  const ready=await waitForInstagramContainer(String(cj.id),token);
  if(!ready.ok)return {ok:false,reason:ready.reason};
  const pBody=new URLSearchParams({access_token:token,creation_id:String(cj.id)});
  const p=await fetch(`${GRAPH}/${ig}/media_publish`,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:pBody});
  const pj=await p.json().catch(()=>({}));
- return p.ok&&pj?.id?{ok:true,id:pj.id,type:video?'reel':'image'}:{ok:false,reason:pj?.error?.message||`Instagram ${video?'Reel':'post'} publish failed`};
+ return p.ok&&pj?.id?{ok:true,id:pj.id,type:postType}:{ok:false,reason:pj?.error?.message||`Instagram ${postType==='reel'?'Reel':'post'} publish failed`};
 }
 
 export async function POST(request:Request){
@@ -95,12 +135,14 @@ export async function POST(request:Request){
  let music:any=null;
  try{if(musicSetting?.setting_value)music=JSON.parse(musicSetting.setting_value)||null}catch{}
 
- if(!settings.enabled||!settings.auto_post_on_publish)return NextResponse.json({ok:true,skipped:'Social Media Agent auto-post is off.'});
+ if(!settings.enabled)return NextResponse.json({ok:true,skipped:'Social Media Agent is off.'});
+ if(!settings.auto_post_on_publish&&!input.force)return NextResponse.json({ok:true,skipped:'Social Media Agent auto-post is off.'});
+ const origin=new URL(request.url).origin||SITE_URL;
  const link=settings.include_link===false?'':`${SITE_URL}/articles/${encodeURIComponent(article.slug)}`;
  const caption=await makeCaption(article,settings);
  const results:any={};
  if(settings.facebook)results.facebook=await postFacebook(article,caption,link,connection);
- if(settings.instagram)results.instagram=await postInstagram(article,music,caption,link,connection);
+ if(settings.instagram)results.instagram=await postInstagram(article,music,caption,link,connection,db,origin);
  if(settings.tiktok)results.tiktok={ok:false,reason:process.env.TIKTOK_ACCESS_TOKEN&&process.env.TIKTOK_OPEN_ID?'TikTok connection detected; direct publishing requires the approved Content Posting flow for the selected media type.':'TikTok not connected'};
  await db.from('site_settings').upsert({setting_key:`social_post_${article.id}`,setting_value:JSON.stringify({article_id:article.id,headline:article.headline,created_at:new Date().toISOString(),results}),updated_at:new Date().toISOString()},{onConflict:'setting_key'});
  return NextResponse.json({ok:true,caption,results});
