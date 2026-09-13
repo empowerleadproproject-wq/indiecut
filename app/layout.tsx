@@ -6,8 +6,21 @@ import WebsiteAnalyticsTracker from './WebsiteAnalyticsTracker';
 import MarketingPixels from './MarketingPixels';
 
 export const metadata: Metadata = {
-  title: 'Indie Cut',
-  description: 'Entertainment, culture, film, television, music, and independent voices.'
+  metadataBase: new URL('https://indiecut.info'),
+  title: {
+    default: 'IndieCut',
+    template: '%s | IndieCut'
+  },
+  applicationName: 'IndieCut',
+  description: 'Entertainment, culture, film, television, music, and independent voices.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    siteName: 'IndieCut',
+    type: 'website',
+    url: 'https://indiecut.info',
+    title: 'IndieCut',
+    description: 'Entertainment, culture, film, television, music, and independent voices.'
+  }
 };
 
 export default function RootLayout({children}:{children:React.ReactNode}){
