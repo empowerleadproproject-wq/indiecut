@@ -13,6 +13,12 @@ const blank:Article={
 
 function videoLike(url:string){return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url||'')}
 function youtubeId(url:string){try{const u=new URL(url);if(u.hostname.includes('youtu.be'))return u.pathname.replace(/^\//,'').split('/')[0];if(u.hostname.includes('youtube.com'))return u.searchParams.get('v')||u.pathname.match(/\/shorts\/([^/?]+)/)?.[1]||u.pathname.match(/\/embed\/([^/?]+)/)?.[1]||''}catch{}return ''}
+function socialMessage(social:any){
+ if(!social)return 'Published to Indie Cut.';
+ if(social.skipped)return `Published to Indie Cut. Social: ${social.skipped}`;
+ const parts:string[]=[];for(const [name,result] of Object.entries(social.results||{})){const r:any=result;parts.push(`${name}: ${r?.ok?'posted':`failed — ${r?.reason||'unknown error'}`}`)}
+ return `Published to Indie Cut.${parts.length?` Social: ${parts.join(' · ')}`:''}`;
+}
 
 export default function ArticleManager(){
  const [rows,setRows]=useState<Article[]>([]);
@@ -51,7 +57,10 @@ export default function ArticleManager(){
   }catch(e:any){setMessage(e?.message||'Save failed.')}finally{setBusy(false)}
  }
  async function publish(row:Article){
-  setBusy(true);setMessage('');try{const data={...row,status:'published',verification_status:'verified'};const r=await fetch('/api/admin/data',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({section:'articles',id:row.id,data})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Publish failed');setMessage('Published to Indie Cut.');await load()}catch(e:any){setMessage(e.message)}finally{setBusy(false)}
+  setBusy(true);setMessage('Publishing article and sending social posts…');try{const data={...row,status:'published',verification_status:'verified'};const r=await fetch('/api/admin/data',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({section:'articles',id:row.id,data})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Publish failed');setMessage(socialMessage(j.social));await load()}catch(e:any){setMessage(e.message)}finally{setBusy(false)}
+ }
+ async function retrySocial(row:Article){
+  setBusy(true);setMessage(`Retrying social distribution for “${row.headline}”…`);try{const r=await fetch('/api/social-agent/publish',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({article_id:row.id,force:true})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Social retry failed');setMessage(j.skipped?`Social retry skipped: ${j.skipped}`:socialMessage(j).replace('Published to Indie Cut. ','Social retry: '))}catch(e:any){setMessage(e.message||'Social retry failed')}finally{setBusy(false)}
  }
  async function remove(id:string){if(!confirm('Delete this article?'))return;const r=await fetch(`/api/admin/data?section=articles&id=${encodeURIComponent(id)}`,{method:'DELETE'});const j=await r.json().catch(()=>({}));if(!r.ok)return setMessage(j.error||'Delete failed');if(editingId===id)reset();await load()}
 
@@ -76,6 +85,6 @@ export default function ArticleManager(){
   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button onClick={save} disabled={busy}>{busy?'SAVING…':editingId?'UPDATE ARTICLE':'SAVE ARTICLE'}</button>{editingId&&<button onClick={reset} disabled={busy}>CANCEL EDIT</button>}</div>
 
   <hr style={{margin:'32px 0 20px'}}/><h2>Articles</h2>
-  <div style={{display:'grid',gap:12}}>{rows.map(row=><article key={row.id} style={{border:'1px solid #ddd',padding:14,display:'grid',gridTemplateColumns:'100px minmax(0,1fr) auto',gap:14,alignItems:'start'}}>{row.featured_media_url?<img src={row.featured_media_url} alt="" style={{width:100,height:78,objectFit:'cover'}}/>:<div style={{width:100,height:78,background:'#eee'}}/>}<div><div style={{fontSize:11,fontWeight:800,letterSpacing:'.08em'}}>{String(row.category||'').toUpperCase()} · {String(row.status||'draft').toUpperCase()}</div><h3 style={{margin:'5px 0'}}>{row.headline}</h3><div style={{fontSize:12,color:'#666'}}>{row.lead_video_url?'🎬 VIDEO ATTACHED':'No article video'} · {row.verification_status||'pending'}</div></div><div style={{display:'flex',gap:6,flexWrap:'wrap',justifyContent:'flex-end'}}><button onClick={()=>edit(row)}>EDIT</button>{row.status!=='published'&&<button onClick={()=>publish(row)} disabled={busy}>PUBLISH</button>}<button onClick={()=>remove(row.id)}>DELETE</button></div></article>)}</div>
+  <div style={{display:'grid',gap:12}}>{rows.map(row=><article key={row.id} style={{border:'1px solid #ddd',padding:14,display:'grid',gridTemplateColumns:'100px minmax(0,1fr) auto',gap:14,alignItems:'start'}}>{row.featured_media_url?<img src={row.featured_media_url} alt="" style={{width:100,height:78,objectFit:'cover'}}/>:<div style={{width:100,height:78,background:'#eee'}}/>}<div><div style={{fontSize:11,fontWeight:800,letterSpacing:'.08em'}}>{String(row.category||'').toUpperCase()} · {String(row.status||'draft').toUpperCase()}</div><h3 style={{margin:'5px 0'}}>{row.headline}</h3><div style={{fontSize:12,color:'#666'}}>{row.lead_video_url?'🎬 VIDEO ATTACHED':'No article video'} · {row.verification_status||'pending'}</div></div><div style={{display:'flex',gap:6,flexWrap:'wrap',justifyContent:'flex-end'}}><button onClick={()=>edit(row)}>EDIT</button>{row.status!=='published'&&<button onClick={()=>publish(row)} disabled={busy}>PUBLISH</button>}{row.status==='published'&&<button onClick={()=>retrySocial(row)} disabled={busy}>RETRY SOCIAL</button>}<button onClick={()=>remove(row.id)}>DELETE</button></div></article>)}</div>
  </section>
 }
