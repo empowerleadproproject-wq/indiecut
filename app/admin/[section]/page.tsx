@@ -19,6 +19,7 @@ import BattleSubmissionsManager from '../BattleSubmissionsManager';
 import BattleRoomSponsors from '../BattleRoomSponsors';
 import BattleArtistEditor from '../BattleArtistEditor';
 import CrmManager from '../CrmManager';
+import MusicManager from '../MusicManager';
 import AutomationBuilderV5 from '../AutomationBuilderV5';
 import TrackingPixelsSettings from '../TrackingPixelsSettings';
 
@@ -49,6 +50,6 @@ export default async function AdminSectionPage({params}:{params:{section:string}
  const section=sections[params.section];if(!section)notFound();
  const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
  if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');
- const content=params.section==='artists'?<><BattleSubmissionsManager/><BattleArtistEditor/></>:params.section==='live-battles'?<><BattleRoomSponsors/><BattleLandingSettings/><BattleSubmissionsManager/><BattleArtistEditor/><BattleManager/></>:params.section==='crm'?<CrmManager/>:params.section==='workflows'?<AutomationBuilderV5/>:params.section==='articles'?<ArticleManager/>:params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='music-video-radar'?<MusicVideoRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:params.section==='tracking-pixels'?<TrackingPixelsSettings/>:params.section==='advertising'?<AdvertisingManager/>:<SectionManager section={params.section}/>;
+ const content=params.section==='artists'?<><BattleSubmissionsManager/><BattleArtistEditor/></>:params.section==='live-battles'?<><BattleRoomSponsors/><BattleLandingSettings/><BattleSubmissionsManager/><BattleArtistEditor/><BattleManager/></>:params.section==='crm'?<CrmManager/>:params.section==='music'?<MusicManager/>:params.section==='workflows'?<AutomationBuilderV5/>:params.section==='articles'?<ArticleManager/>:params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='music-video-radar'?<MusicVideoRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:params.section==='tracking-pixels'?<TrackingPixelsSettings/>:params.section==='advertising'?<AdvertisingManager/>:<SectionManager section={params.section}/>;
  return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{content}{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
 }
