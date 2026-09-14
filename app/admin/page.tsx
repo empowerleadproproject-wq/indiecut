@@ -7,7 +7,7 @@ import { isAdminEmail } from '../../lib/admin';
 const modules=[
  {slug:'homepage',label:'Homepage',description:'Control the Indie Cut homepage, featured stories, hero media and section visibility.'},
  {slug:'articles',label:'Articles',description:'Create, edit, review, publish and feature entertainment stories.'},
- {slug:'artists',label:'Artists & People',description:'Manage actors, musicians, filmmakers, creators and emerging talent profiles.'},
+ {slug:'artists',label:'Artists',description:'Review artist profiles, approve or reject new submissions, and edit approved artists.'},
  {slug:'music',label:'Music',description:'Add songs, performances, releases, covers and artist media.'},
  {slug:'live-battles',label:'Live Battles',description:'Run artist qualifying, fan voting, live DJ battles, sponsor breaks, brackets and winners.'},
  {slug:'crm',label:'Artist CRM',description:'Collect and manage artist names, emails, phone numbers, genres, locations, notes, campaigns and GoHighLevel sync.'},
