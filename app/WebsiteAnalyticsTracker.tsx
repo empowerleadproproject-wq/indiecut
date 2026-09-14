@@ -31,7 +31,7 @@ export default function WebsiteAnalyticsTracker(){
   send({event_type:'page_view'});
 
   let activeMs=0;
-  let activeStarted=document.visibilityState==='visible'?performance.now():null as number|null;
+  let activeStarted:number|null=document.visibilityState==='visible'?performance.now():null;
   let maxScroll=0;
   let finalized=false;
   const updateScroll=()=>{
@@ -55,12 +55,18 @@ export default function WebsiteAnalyticsTracker(){
 
   const seenAds=new Set<string>();
   const observed=new WeakSet<Element>();
-  const adPayload=(el:Element)=>({
-   ad_id:el.getAttribute('data-ic-ad-id')||'',
-   ad_name:el.getAttribute('data-ic-ad-name')||'',
-   ad_placement:el.getAttribute('data-ic-ad-placement')||'',
-   target_url:el.getAttribute('data-ic-ad-destination')||''
-  });
+  const adPayload=(el:Element)=>{
+   const media=el.querySelector('img,video');
+   const link=el.matches('a')?el as HTMLAnchorElement:el.querySelector('a');
+   const creative=media?.getAttribute('src')||'';
+   const fallbackPlacement=el.classList.contains('ic-article-top-ad')?'article-top':el.classList.contains('ic-article-inline-ad')?'article-inline':el.classList.contains('ic-article-ad-slot')?'right-rail':'unspecified';
+   return {
+    ad_id:el.getAttribute('data-ic-ad-id')||creative||link?.getAttribute('href')||'',
+    ad_name:el.getAttribute('data-ic-ad-name')||(media instanceof HTMLImageElement?media.alt:'')||'Advertisement',
+    ad_placement:el.getAttribute('data-ic-ad-placement')||fallbackPlacement,
+    target_url:el.getAttribute('data-ic-ad-destination')||link?.getAttribute('href')||''
+   };
+  };
   const impressionObserver=new IntersectionObserver(entries=>{
    for(const entry of entries){
     if(!entry.isIntersecting||entry.intersectionRatio<0.5)continue;
@@ -73,12 +79,14 @@ export default function WebsiteAnalyticsTracker(){
     impressionObserver.unobserve(el);
    }
   },{threshold:[0.5]});
-  const scanAds=()=>document.querySelectorAll('[data-ic-ad-id]').forEach(el=>{if(!observed.has(el)){observed.add(el);impressionObserver.observe(el)}});
+  const selector='[data-ic-ad-id],.ic-article-ad-slot,.ic-article-top-ad,.ic-article-inline-ad';
+  const scanAds=()=>document.querySelectorAll(selector).forEach(el=>{if(!observed.has(el)){observed.add(el);impressionObserver.observe(el)}});
   scanAds();
   const mutations=new MutationObserver(scanAds);
   mutations.observe(document.body,{childList:true,subtree:true});
   const onClick=(event:MouseEvent)=>{
-   const target=event.target instanceof Element?event.target.closest('[data-ic-ad-id]'):null;
+   const raw=event.target instanceof Element?event.target:null;
+   const target=raw?.closest(selector);
    if(!target)return;
    const info=adPayload(target);
    if(info.ad_id)send({event_type:'ad_click',...info});
