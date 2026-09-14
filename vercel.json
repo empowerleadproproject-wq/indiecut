@@ -13,6 +13,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/autonomous-agent",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/breaking-news/cron",
       "schedule": "0 13 * * *"
     },
