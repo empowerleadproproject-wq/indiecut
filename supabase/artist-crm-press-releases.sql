@@ -23,7 +23,7 @@ create table if not exists public.crm_press_releases (
   press_title text,
   press_summary text,
   press_content text,
-  press_categories jsonb not null default '["Arts & Entertainment"]'::jsonb,
+  press_categories jsonb not null default '[]'::jsonb,
   distribution_plan text not null default 'free',
   provider text not null default 'prnow',
   provider_release_id text,
