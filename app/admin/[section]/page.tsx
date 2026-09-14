@@ -18,19 +18,17 @@ import BattleLandingSettings from '../BattleLandingSettings';
 import BattleSubmissionsManager from '../BattleSubmissionsManager';
 import BattleRoomSponsors from '../BattleRoomSponsors';
 import BattleArtistEditor from '../BattleArtistEditor';
-import AutonomousAgent from '../AutonomousAgent';
 import CrmManager from '../CrmManager';
-import PressReleaseManager from '../PressReleaseManager';
 import AutomationBuilderV5 from '../AutomationBuilderV5';
 import TrackingPixelsSettings from '../TrackingPixelsSettings';
 
 const sections:Record<string,{title:string;intro:string}>={
  homepage:{title:'Homepage',intro:'Control hero content, featured stories and homepage presentation.'},
  articles:{title:'Articles',intro:'Create, edit, verify and publish Indie Cut stories with uploaded media.'},
- artists:{title:'Artists & People',intro:'Manage actors, musicians, filmmakers, creators and emerging talent.'},
+ artists:{title:'Artists',intro:'Review artist profile submissions, approve or reject new artists, and edit approved artist profiles.'},
  music:{title:'Music',intro:'Add songs, releases, performances and music media.'},
  'live-battles':{title:'Live Battles',intro:'Control the Live Battles front door, Battle Room sponsor ads, artist submissions, approved artist profiles, fan qualifying, the three-person stage, sponsor breaks, round votes and bracket results.'},
- crm:{title:'Artist CRM',intro:'Run the autonomous CRM agent, own artist relationships, campaigns and opportunities, create IndieCut article drafts, and distribute professional artist press releases from one system.'},
+ crm:{title:'Artist CRM',intro:'Own the artist relationship database: names, emails, phone numbers, genre, location, notes, tags, email campaigns and optional GoHighLevel sync.'},
  workflows:{title:'Workflows & SMS',intro:'Build visual automations, send TextGrid SMS, create drip sequences, schedule campaigns and manage workflow enrollments.'},
  'independent-music':{title:'Independent Music Radar',intro:'Discover trending independent R&B, hip-hop, soul, Afrobeats and other emerging urban artists using live web signals.'},
  'music-video-radar':{title:'Music Video Radar',intro:'Find newly released official music videos from independent and major artists, preview them, and publish them to Indie Cut Watch.'},
@@ -51,6 +49,6 @@ export default async function AdminSectionPage({params}:{params:{section:string}
  const section=sections[params.section];if(!section)notFound();
  const supabase=createClient();const {data:{user}}=await supabase.auth.getUser();
  if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');
- const content=params.section==='live-battles'?<><BattleRoomSponsors/><BattleLandingSettings/><BattleSubmissionsManager/><BattleArtistEditor/><BattleManager/></>:params.section==='crm'?<><AutonomousAgent/><PressReleaseManager/><CrmManager/></>:params.section==='workflows'?<AutomationBuilderV5/>:params.section==='articles'?<ArticleManager/>:params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='music-video-radar'?<MusicVideoRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:params.section==='tracking-pixels'?<TrackingPixelsSettings/>:params.section==='advertising'?<AdvertisingManager/>:<SectionManager section={params.section}/>;
+ const content=params.section==='artists'?<><BattleSubmissionsManager/><BattleArtistEditor/></>:params.section==='live-battles'?<><BattleRoomSponsors/><BattleLandingSettings/><BattleSubmissionsManager/><BattleArtistEditor/><BattleManager/></>:params.section==='crm'?<CrmManager/>:params.section==='workflows'?<AutomationBuilderV5/>:params.section==='articles'?<ArticleManager/>:params.section==='breaking-news'?<BreakingNewsRadar/>:params.section==='independent-music'?<IndependentMusicRadar/>:params.section==='music-video-radar'?<MusicVideoRadar/>:params.section==='social-agent'?<SocialAgentSettings/>:params.section==='analytics'?<><WebsiteAnalytics/><SocialAnalytics/></>:params.section==='tracking-pixels'?<TrackingPixelsSettings/>:params.section==='advertising'?<AdvertisingManager/>:<SectionManager section={params.section}/>;
  return <main className="ic-module-page"><header className="ic-module-header"><Link href="/admin">← Back Office</Link><div className="ic-admin-eyebrow">INDIE CUT ADMIN</div><h1>{section.title}</h1><p>{section.intro}</p></header>{content}{params.section==='content-agent'&&<ContentAgentScheduler/>}{params.section==='settings'&&<FooterSettings/>}</main>
 }
