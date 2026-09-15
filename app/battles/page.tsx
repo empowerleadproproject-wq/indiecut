@@ -9,10 +9,10 @@ export const revalidate=0;
 const defaults={
  headline:'WHERE INDEPENDENT ARTISTS BATTLE FOR THE CROWN.',
  subheadline:'Two artists. One stage. The fans decide who moves forward.',
- primary_button:'ENTER THE BATTLE ROOM',
+ primary_button:'SUBMIT YOUR MUSIC',
  artist_prompt:"Independent artist? Think you've got what it takes?",
  artist_copy:'Submit your music for a chance to compete in the next Indie Cut Battle.',
- secondary_button:'SUBMIT YOUR MUSIC',
+ secondary_button:'WATCH LIVE BATTLES',
  submission_open:true,
  images:[] as string[]
 };
@@ -28,7 +28,7 @@ async function landingData(){
  const articleImages=(articles||[]).map((x:any)=>x.featured_media_url).filter(Boolean);
  const configured=Array.isArray(saved.images)?saved.images:[];
  const images=Array.from({length:7},(_,i)=>configured[i]||articleImages[i]||'').filter(Boolean);
- return {content:{...defaults,...saved,images},currentBattleSlug:contests?.[0]?.slug||''};
+ return {content:{...defaults,...saved,primary_button:'SUBMIT YOUR MUSIC',secondary_button:'WATCH LIVE BATTLES',images},currentBattleSlug:contests?.[0]?.slug||''};
 }
 
 export default async function BattlesLandingPage(){
@@ -40,19 +40,21 @@ export default async function BattlesLandingPage(){
     <div className={`${styles.landingKicker} battle-mobile-kicker`}>INDIE CUT LIVE BATTLES</div>
     <h1>{content.headline}</h1>
     {content.subheadline&&<p className={`${styles.landingSubhead} battle-mobile-subhead`}>{content.subheadline}</p>}
-    <div className={`${styles.landingButtonOrbit} battle-mobile-orbit`}><a className={`${styles.landingPrimary} battle-mobile-primary`} href="/battles/room">{content.primary_button}</a></div>
+    {content.submission_open&&<div className={`${styles.landingButtonOrbit} battle-mobile-orbit`}><a className={`${styles.landingPrimary} battle-mobile-primary`} href="/battles/submit">{content.primary_button} →</a></div>}
+    <a className="battle-watch-link" href="/battles/room">{content.secondary_button} →</a>
     <a className="battle-rankings-link" href="/battles/rankings"><span className="battle-rankings-dot"/>SEE WHERE YOUR FAVORITE ARTIST RANKS →</a>
     {currentBattleSlug&&<a className="battle-current-link" href={`/battles/${currentBattleSlug}`}>MEET THE ARTISTS & VOTE →</a>}
-    {content.submission_open&&<div className={`${styles.artistInvite} battle-mobile-invite`}><strong>{content.artist_prompt}</strong><span>{content.artist_copy}</span><a href="/battles/submit">{content.secondary_button} →</a></div>}
+    {content.submission_open&&<div className={`${styles.artistInvite} battle-mobile-invite`}><strong>{content.artist_prompt}</strong><span>{content.artist_copy}</span></div>}
    </div>
   </section>
   <style>{`
    .battle-mobile-center{width:min(760px,68%)!important;max-width:760px!important;box-sizing:border-box!important;padding:84px 0 72px!important;}
    .battle-mobile-center h1{font-size:clamp(38px,3.6vw,52px)!important;line-height:1.02!important;letter-spacing:-.035em!important;max-width:720px!important;margin:0 auto 18px!important;text-wrap:balance;}
    .battle-mobile-subhead{font-size:16px!important;line-height:1.5!important;max-width:540px!important;margin:0 auto 24px!important;}
-   .battle-rankings-link,.battle-current-link{display:inline-flex;align-items:center;justify-content:center;gap:9px;margin-top:14px;padding:11px 18px;border:1px solid rgba(255,255,255,.25);border-radius:999px;color:#fff;text-decoration:none;font-size:11px;font-weight:900;letter-spacing:.08em;background:rgba(8,8,8,.6);backdrop-filter:blur(10px);transition:.2s ease;}
+   .battle-watch-link,.battle-rankings-link,.battle-current-link{display:inline-flex;align-items:center;justify-content:center;gap:9px;margin-top:14px;padding:11px 18px;border:1px solid rgba(255,255,255,.25);border-radius:999px;color:#fff;text-decoration:none;font-size:11px;font-weight:900;letter-spacing:.08em;background:rgba(8,8,8,.6);backdrop-filter:blur(10px);transition:.2s ease;}
+   .battle-watch-link{margin-right:8px;border-color:rgba(255,255,255,.4);}
    .battle-current-link{margin-left:8px;border-color:#e744bd;background:#e744bd;color:#fff;}
-   .battle-rankings-link:hover,.battle-current-link:hover{border-color:#e744bd;color:#fff;transform:translateY(-2px);background:rgba(231,68,189,.12);}
+   .battle-watch-link:hover,.battle-rankings-link:hover,.battle-current-link:hover{border-color:#e744bd;color:#fff;transform:translateY(-2px);background:rgba(231,68,189,.12);}
    .battle-current-link:hover{background:#c72fa0;}
    .battle-rankings-dot{width:7px;height:7px;border-radius:50%;background:#e744bd;box-shadow:0 0 0 5px rgba(231,68,189,.14);}
    @media (max-width:1100px){
@@ -67,7 +69,7 @@ export default async function BattlesLandingPage(){
     .battle-mobile-center h1{font-size:clamp(34px,5.2vw,43px)!important;max-width:560px!important;line-height:1.03!important;}
     .battle-mobile-subhead{font-size:15px!important;max-width:480px!important;}
     .mobile-float-2,.mobile-float-6{display:none!important;}
-    .battle-current-link{margin-left:0;}
+    .battle-watch-link,.battle-current-link{margin-left:0;margin-right:0;}
    }
    @media (max-width:620px){
     .battle-mobile-shell{padding:0 14px 24px!important;}
@@ -78,10 +80,9 @@ export default async function BattlesLandingPage(){
     .battle-mobile-subhead{font-size:14px!important;line-height:1.45!important;max-width:300px!important;margin:0 auto 22px!important;}
     .battle-mobile-orbit{display:block!important;width:min(100%,300px)!important;margin:0 auto!important;}
     .battle-mobile-primary{display:block!important;width:100%!important;box-sizing:border-box!important;padding:14px 16px!important;font-size:12px!important;}
-    .battle-rankings-link,.battle-current-link{display:flex;width:min(100%,300px);box-sizing:border-box;font-size:9px;padding:11px 10px;margin:10px auto 0;}
+    .battle-watch-link,.battle-rankings-link,.battle-current-link{display:flex;width:min(100%,300px);box-sizing:border-box;font-size:9px;padding:11px 10px;margin:10px auto 0;}
     .battle-mobile-invite{margin-top:18px!important;max-width:300px!important;font-size:12px!important;line-height:1.4!important;gap:6px!important;}
     .battle-mobile-invite strong{font-size:13px!important;}
-    .battle-mobile-invite a{margin-top:5px!important;}
     .mobile-float-1{width:98px!important;height:130px!important;left:14px!important;top:34px!important;border-radius:13px!important;}
     .mobile-float-2{display:none!important;}
     .mobile-float-3{width:124px!important;height:86px!important;left:auto!important;right:14px!important;top:22px!important;border-radius:13px!important;}
