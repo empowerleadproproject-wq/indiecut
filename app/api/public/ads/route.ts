@@ -25,7 +25,7 @@ function publicAd(ad:any,geo:VisitorGeo){
  return {
   _id:String(ad?._id||''),advertiser:String(ad?.advertiser||''),title:String(ad?.title||''),
   creative_url:String(ad?.creative_url||''),creative_media_type:String(ad?.creative_media_type||''),
-  destination_url:String(ad?.destination_url||''),placement:String(ad?.placement||''),
+  destination_url:String(ad?.destination_url||''),cta_text:String(ad?.cta_text||'Learn More').slice(0,40),placement:String(ad?.placement||''),
   _audience_scope:effectiveAudienceScope(ad,geo)
  };
 }
