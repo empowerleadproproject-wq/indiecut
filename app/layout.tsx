@@ -17,7 +17,10 @@ export const metadata: Metadata = {
   applicationName: 'IndieCut',
   description: SITE_DESCRIPTION,
   category: 'entertainment',
-  alternates: { canonical: '/' },
+  alternates: {
+    canonical: '/',
+    types: {'application/rss+xml':'/rss.xml'}
+  },
   robots: {
     index: true,
     follow: true,
