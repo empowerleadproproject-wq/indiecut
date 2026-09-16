@@ -34,9 +34,30 @@ async function resumableUpload(file:File,info:any,onProgress?:(percent:number)=>
  });
 }
 
+async function uploadToR2(file:File,info:any,onProgress?:(percent:number)=>void){
+ const signedUrl=String(info.signedUrl||'');
+ if(!signedUrl)throw new Error('Upload URL is unavailable.');
+ const response=await fetch(signedUrl,{method:'PUT',headers:{'content-type':file.type||'application/octet-stream'},body:file});
+ if(!response.ok){const detail=(await response.text().catch(()=>'' )).slice(0,300);throw new Error(detail?`Song upload failed (${response.status}): ${detail}`:`Song upload failed (${response.status}).`)}
+ onProgress?.(100);
+}
+
+async function uploadToSupabaseSignedUrl(file:File,info:any,onProgress?:(percent:number)=>void){
+ const signedUrl=String(info.signedUrl||'');
+ if(!signedUrl)return false;
+ const body=new FormData();body.append('cacheControl','3600');body.append('',file);
+ const response=await fetch(signedUrl,{method:'PUT',headers:{'x-upsert':'false'},body});
+ if(!response.ok){const detail=(await response.text().catch(()=>'' )).slice(0,300);throw new Error(detail?`Upload failed (${response.status}): ${detail}`:`Upload failed (${response.status}).`)}
+ onProgress?.(100);return true;
+}
+
 async function directUpload(file:File,kind:'image'|'audio',onProgress?:(percent:number)=>void){
  const meta=await fetch('/api/battle-submissions/upload-url',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({fileName:file.name,mime:file.type,size:file.size,kind})});const info=await meta.json().catch(()=>({}));if(!meta.ok)throw new Error(info.error||'Unable to prepare upload.');
- if(file.size>RESUMABLE_THRESHOLD){
+ if(info.provider==='r2'){
+  await uploadToR2(file,info,onProgress);
+ }else if(await uploadToSupabaseSignedUrl(file,info,onProgress)){
+  // Signed upload URLs do not need the browser Supabase auth header.
+ }else if(file.size>RESUMABLE_THRESHOLD){
   await resumableUpload(file,info,onProgress);
  }else{
   const supabase=createClient();const {error}=await supabase.storage.from(info.bucket).uploadToSignedUrl(info.path,info.token,file,{contentType:file.type});if(error)throw new Error(error.message);
