@@ -30,11 +30,11 @@ async function FeaturedMedia({url,headline,showSpotifyArtwork=true}:{url:string;
 
 function AdUnit({ad,className='ic-article-ad-slot'}:{ad:any;className?:string}){const creative=ad?.creative_url;if(!creative)return null;const media=<AdCreative src={creative} alt={ad.advertiser||ad.title||'Advertisement'} mediaType={ad.creative_media_type||''} isVideo={Boolean(ad._isVideo)}/>;return <div className={className}><span>ADVERTISEMENT</span>{ad.destination_url?<a href={ad.destination_url} target="_blank" rel="noreferrer sponsored">{media}</a>:media}</div>}
 
-export async function generateMetadata({params}:{params:{slug:string}}):Promise<Metadata>{const {data}=await db().from('articles').select('headline,subheadline,featured_media_url,slug').eq('slug',decodeURIComponent(params.slug)).eq('status','published').eq('verification_status','verified').maybeSingle();if(!data)return {title:'IndieCut'};const url=`${SITE_URL}/articles/${encodeURIComponent(data.slug)}`;const description=data.subheadline||data.headline;const spotifyImage=data.featured_media_url?await spotifyCover(data.featured_media_url):'';const image=spotifyImage||(data.featured_media_url&&!isPlayableEmbed(data.featured_media_url)?data.featured_media_url:undefined);return {title:`${data.headline} | IndieCut`,description,alternates:{canonical:url},openGraph:{type:'article',siteName:'IndieCut',title:data.headline,description,url,images:image?[{url:image,alt:data.headline}]:undefined},twitter:{card:image?'summary_large_image':'summary',title:data.headline,description,images:image?[image]:undefined}}}
+export async function generateMetadata({params}:{params:{slug:string}}):Promise<Metadata>{const {data}=await db().from('articles').select('headline,subheadline,featured_media_url,slug,published_at,updated_at,author_name,category').eq('slug',decodeURIComponent(params.slug)).eq('status','published').eq('verification_status','verified').maybeSingle();if(!data)return {title:'IndieCut'};const url=`${SITE_URL}/articles/${encodeURIComponent(data.slug)}`;const description=data.subheadline||data.headline;const spotifyImage=data.featured_media_url?await spotifyCover(data.featured_media_url):'';const image=spotifyImage||(data.featured_media_url&&!isPlayableEmbed(data.featured_media_url)?data.featured_media_url:undefined);return {title:data.headline,description,alternates:{canonical:url},robots:{index:true,follow:true,googleBot:{index:true,follow:true,'max-image-preview':'large','max-snippet':-1,'max-video-preview':-1}},openGraph:{type:'article',siteName:'IndieCut',title:data.headline,description,url,images:image?[{url:image,alt:data.headline}]:undefined,publishedTime:data.published_at||undefined,modifiedTime:data.updated_at||undefined,authors:[data.author_name||'IndieCut Editorial'],section:data.category||undefined},twitter:{card:image?'summary_large_image':'summary',title:data.headline,description,images:image?[image]:undefined}}}
 
 export default async function ArticlePage({params}:{params:{slug:string}}){
  const client=db();const {data}=await client.from('articles').select('*').eq('slug',decodeURIComponent(params.slug)).eq('status','published').eq('verification_status','verified').maybeSingle();if(!data)notFound();
- const [{data:adRow},{data:musicRow}]=await Promise.all([client.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle(),client.from('site_settings').select('setting_value').eq('setting_key',`article_media_${data.id}`).maybeSingle()]);
+ const [{data:adRow},{data:musicRow},{data:relatedRows}]=await Promise.all([client.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle(),client.from('site_settings').select('setting_value').eq('setting_key',`article_media_${data.id}`).maybeSingle(),client.from('articles').select('headline,slug,subheadline,category,published_at').eq('status','published').eq('verification_status','verified').eq('category',data.category).neq('id',data.id).order('published_at',{ascending:false}).limit(4)]);
  let ads:any[]=[];try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}let music:any=null;try{music=musicRow?.setting_value?JSON.parse(musicRow.setting_value):null}catch{}
  const supplementalMedia=String(music?.spotify||music?.media_url||'').trim();const showSupplementalMedia=Boolean(supplementalMedia&&supplementalMedia!==data.featured_media_url&&isPlayableEmbed(supplementalMedia));
  const leadVideo=String(data.lead_video_url||'').trim();const showLeadVideo=Boolean(leadVideo&&isLeadVideo(leadVideo));
@@ -43,18 +43,50 @@ export default async function ArticlePage({params}:{params:{slug:string}}){
  const topAds=priorityShuffle(typedAds.filter(a=>a.placement==='article-top'||a.placement==='sitewide')).slice(0,1);
  const inlineAds=priorityShuffle(typedAds.filter(a=>a.placement==='article-inline'||a.placement==='sitewide')).slice(0,2);
  const paragraphs=String(data.body||'').split(/\n\n+/).filter(Boolean);
- return <main><PublicHeader/><div className="ic-article-page-grid"><article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIECUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{data.author_name||'IndieCut Editorial'}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
+ const canonicalUrl=`${SITE_URL}/articles/${encodeURIComponent(data.slug)}`;
+ const sources=Array.isArray(data.sources)?data.sources.filter((s:any)=>/^https?:\/\//i.test(String(s||''))):[];
+ const authorName=String(data.author_name||'IndieCut Editorial');
+ const articleSchema={
+  '@context':'https://schema.org',
+  '@type':'NewsArticle',
+  '@id':`${canonicalUrl}#article`,
+  mainEntityOfPage:{'@type':'WebPage','@id':canonicalUrl},
+  headline:data.headline,
+  description:data.subheadline||data.headline,
+  datePublished:data.published_at||data.created_at||undefined,
+  dateModified:data.updated_at||data.published_at||data.created_at||undefined,
+  articleSection:data.category||undefined,
+  keywords:[data.subject_name,data.category].filter(Boolean).join(', ')||undefined,
+  image:data.featured_media_url&&!isPlayableEmbed(data.featured_media_url)?[data.featured_media_url]:undefined,
+  author:{'@type':/^indiecut/i.test(authorName)?'Organization':'Person',name:authorName},
+  publisher:{'@type':'Organization','@id':`${SITE_URL}/#organization`,name:'IndieCut',url:SITE_URL},
+  isAccessibleForFree:true,
+  citation:sources.length?sources:undefined,
+  inLanguage:'en-US'
+ };
+ const sectionUrl=`${SITE_URL}${categoryPath(data.category)}`;
+ const breadcrumbSchema={
+  '@context':'https://schema.org',
+  '@type':'BreadcrumbList',
+  itemListElement:[
+   {'@type':'ListItem',position:1,name:'IndieCut',item:SITE_URL},
+   {'@type':'ListItem',position:2,name:String(data.category||'Articles').replace(/^./,(m:string)=>m.toUpperCase()),item:sectionUrl},
+   {'@type':'ListItem',position:3,name:data.headline,item:canonicalUrl}
+  ]
+ };
+ return <main><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify([articleSchema,breadcrumbSchema]).replace(/</g,'\\u003c')}}/><PublicHeader/><div className="ic-article-page-grid"><article className="article"><a className="kicker ic-category-link" href={categoryPath(data.category)}>{String(data.category||'INDIECUT').toUpperCase()} →</a><h1>{data.headline}</h1>{data.subheadline&&<p className="dek">{data.subheadline}</p>}<div className="meta">{authorName}{data.published_at?` · ${new Date(data.published_at).toLocaleDateString()}`:''}</div><ShareButtons headline={data.headline}/>
    {topAds.map((ad:any,i:number)=><AdUnit key={ad._id||ad.id||`top-${i}`} ad={ad} className="ic-article-top-ad"/>)}
    {showLeadVideo&&<section className="ic-lead-video"><div className="kicker">WATCH</div><FeaturedMedia url={leadVideo} headline={data.headline} showSpotifyArtwork={false}/>{data.lead_video_source_url&&<div className="ic-video-source"><a href={data.lead_video_source_url} target="_blank" rel="noreferrer">View original video source ↗</a></div>}</section>}
    {data.featured_media_url&&<FeaturedMedia url={data.featured_media_url} headline={data.headline}/>} 
    {showSupplementalMedia&&<section style={{margin:'24px 0'}}><div className="kicker">LISTEN / WATCH</div>{music.title&&<h3>{music.title}</h3>}<FeaturedMedia url={supplementalMedia} headline={music.title||data.headline} showSpotifyArtwork={false}/></section>}
    {paragraphs.map((p:string,i:number)=><div key={i}><p>{p}</p>{i===1&&inlineAds[0]&&<AdUnit ad={inlineAds[0]} className="ic-article-inline-ad"/>}{i===4&&inlineAds[1]&&<AdUnit ad={inlineAds[1]} className="ic-article-inline-ad"/>}</div>)}
-   {Array.isArray(data.sources)&&data.sources.length>0&&<section><div className="kicker">VERIFIED SOURCES</div><ul>{data.sources.map((s:string,i:number)=><li key={i}><a href={s} target="_blank" rel="noreferrer">{s}</a></li>)}</ul></section>}
+   {sources.length>0&&<section><div className="kicker">VERIFIED SOURCES</div><ul>{sources.map((s:string,i:number)=><li key={i}><a href={s} target="_blank" rel="noreferrer">{s}</a></li>)}</ul></section>}
+   {Array.isArray(relatedRows)&&relatedRows.length>0&&<section className="ic-related-stories" aria-label="Related stories"><div className="kicker">MORE FROM INDIECUT</div><div className="ic-related-grid">{relatedRows.map((row:any)=><a key={row.slug} href={`/articles/${encodeURIComponent(row.slug)}`}><strong>{row.headline}</strong>{row.subheadline&&<span>{row.subheadline}</span>}</a>)}</div></section>}
   </article>{railAds.length>0&&<aside className="ic-article-ad-rail" aria-label="Advertisements">{railAds.map((ad:any,i:number)=><AdUnit key={ad._id||ad.id||`${ad.creative_url}-${i}`} ad={ad}/>)}</aside>}</div>
   <style>{`
    .ic-article-page-grid{width:min(1240px,calc(100% - 40px));margin:0 auto;display:grid;grid-template-columns:minmax(0,850px) 320px;gap:36px;align-items:start}
-   .ic-article-page-grid .article{width:auto;max-width:none;margin:0;padding-left:0;padding-right:0}.ic-article-ad-rail{padding-top:50px;display:flex;flex-direction:column;gap:24px;position:sticky;top:76px;align-self:start}.ic-article-ad-slot{width:100%;border-top:1px solid #ccc;border-bottom:1px solid #ddd;background:#fff;padding:10px 0 16px}.ic-article-ad-slot>span,.ic-article-top-ad>span,.ic-article-inline-ad>span{display:block;text-align:center;font-size:9px;line-height:1;letter-spacing:1.2px;color:#888;margin-bottom:9px;font-weight:700}.ic-article-ad-slot a,.ic-article-top-ad a,.ic-article-inline-ad a{display:block}.ic-article-ad-slot img,.ic-article-ad-slot video{display:block;width:100%;height:auto;min-height:180px;max-height:500px;object-fit:contain;margin:0;background:#000}.ic-article-top-ad,.ic-article-inline-ad{width:100%;margin:24px 0;padding:10px 0 16px;border-top:1px solid #ddd;border-bottom:1px solid #ddd}.ic-article-top-ad img,.ic-article-top-ad video,.ic-article-inline-ad img,.ic-article-inline-ad video{display:block;width:100%;height:auto;min-height:220px;max-height:520px;object-fit:contain;margin:0 auto;background:#000}.ic-lead-video{margin:28px 0 30px}.ic-lead-video>.kicker{margin-bottom:8px}.ic-video-source{margin-top:-14px;font-size:12px}.ic-video-source a{color:#666;text-decoration:underline}
+   .ic-article-page-grid .article{width:auto;max-width:none;margin:0;padding-left:0;padding-right:0}.ic-article-ad-rail{padding-top:50px;display:flex;flex-direction:column;gap:24px;position:sticky;top:76px;align-self:start}.ic-article-ad-slot{width:100%;border-top:1px solid #ccc;border-bottom:1px solid #ddd;background:#fff;padding:10px 0 16px}.ic-article-ad-slot>span,.ic-article-top-ad>span,.ic-article-inline-ad>span{display:block;text-align:center;font-size:9px;line-height:1;letter-spacing:1.2px;color:#888;margin-bottom:9px;font-weight:700}.ic-article-ad-slot a,.ic-article-top-ad a,.ic-article-inline-ad a{display:block}.ic-article-ad-slot img,.ic-article-ad-slot video{display:block;width:100%;height:auto;min-height:180px;max-height:500px;object-fit:contain;margin:0;background:#000}.ic-article-top-ad,.ic-article-inline-ad{width:100%;margin:24px 0;padding:10px 0 16px;border-top:1px solid #ddd;border-bottom:1px solid #ddd}.ic-article-top-ad img,.ic-article-top-ad video,.ic-article-inline-ad img,.ic-article-inline-ad video{display:block;width:100%;height:auto;min-height:220px;max-height:520px;object-fit:contain;margin:0 auto;background:#000}.ic-lead-video{margin:28px 0 30px}.ic-lead-video>.kicker{margin-bottom:8px}.ic-video-source{margin-top:-14px;font-size:12px}.ic-video-source a{color:#666;text-decoration:underline}.ic-related-stories{margin-top:42px;padding-top:24px;border-top:1px solid #ddd}.ic-related-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.ic-related-grid>a{display:flex;flex-direction:column;gap:6px;padding:16px;border:1px solid #e2e2e2;text-decoration:none;color:inherit}.ic-related-grid>a:hover{border-color:#111}.ic-related-grid strong{font-size:17px;line-height:1.25}.ic-related-grid span{font-size:13px;line-height:1.4;color:#666}
    @media(max-width:1100px){.ic-article-page-grid{display:block;width:min(850px,calc(100% - 32px))}.ic-article-page-grid .article{padding-left:0;padding-right:0}.ic-article-ad-rail{position:static;padding-top:28px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}}
-   @media(max-width:640px){.ic-article-ad-rail{grid-template-columns:1fr}}
+   @media(max-width:640px){.ic-article-ad-rail,.ic-related-grid{grid-template-columns:1fr}}
   `}</style><PublicFooter/></main>
 }
