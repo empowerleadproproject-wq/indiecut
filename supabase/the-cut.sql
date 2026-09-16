@@ -19,7 +19,7 @@ create table if not exists public.cut_rooms (
   title text not null,
   description text,
   category text not null default 'Open Networking',
-  host_id uuid not null references auth.users(id) on delete cascade,
+  host_id uuid not null references public.cut_profiles(id) on delete cascade,
   status text not null default 'live' check (status in ('scheduled','live','ended','cancelled')),
   scheduled_for timestamptz,
   started_at timestamptz,
