@@ -17,6 +17,31 @@ function sourceHosts(urls:string[]){const hosts=new Set<string>();for(const u of
 function todayLabel(){return new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',dateStyle:'long'}).format(new Date())}
 function validUrl(value:any){const s=String(value||'').trim();return /^https?:\/\//i.test(s)?s:''}
 function embeddableLeadVideo(value:any){const s=validUrl(value);if(!s)return'';try{const u=new URL(s);if(u.hostname.includes('youtube.com')||u.hostname.includes('youtu.be'))return s}catch{}return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(s)?s:''}
+function normalized(value:any){return String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+function likelySameSubject(story:any,row:any){
+ const subject=normalized(story?.subject_name);const priorSubject=normalized(row?.subject_name);const priorHeadline=normalized(row?.headline);
+ if(subject&&priorSubject&&(subject===priorSubject||subject.includes(priorSubject)||priorSubject.includes(subject)))return true;
+ if(subject){const tokens=subject.split(/\s+/).filter((x:string)=>x.length>2);if(tokens.length&&tokens.every((x:string)=>priorHeadline.includes(x)))return true}
+ return titleSimilarity(String(story?.headline||''),String(row?.headline||''))>=0.28;
+}
+function shortlistCoverage(story:any,rows:any[]){
+ return (rows||[]).filter((row:any)=>likelySameSubject(story,row)).slice(0,24).map((row:any)=>({headline:String(row?.headline||''),subheadline:String(row?.subheadline||''),subject_name:String(row?.subject_name||''),published_at:String(row?.published_at||row?.created_at||''),body_excerpt:String(row?.body||'').replace(/\s+/g,' ').slice(0,700)}));
+}
+async function runCoverageGate(apiKey:string,story:any,rows:any[]){
+ const prior=shortlistCoverage(story,rows);
+ if(!prior.length)return {decision:'new_story',reason:'No closely related prior Indie Cut coverage found.',matched_headline:''};
+ const prompt=`You are Indie Cut's coverage editor. Decide whether a proposed story repeats prior Indie Cut coverage. This is a STORY/EVENT check, not a PERSON-NAME check. The same artist, actor or celebrity may be covered many times when something genuinely different happens.\n\nDefinitions:\n- duplicate: the proposed story is the same underlying event, announcement, allegation, release, ruling, interview angle or situation Indie Cut already covered, even if the headline wording or source is different. Another outlet repeating the same facts is NOT new.\n- material_update: the proposed story continues a situation Indie Cut covered, but contains a genuinely new factual development that happened afterward and changes or advances the story, such as a new court ruling/filing, arrest/release, official decision, confirmed casting/release change, new result, new announcement, or other concrete development. A fresh rewrite, new commentary, or another source repeating old facts is NOT a material update.\n- new_story: it is a meaningfully different event or angle about the same person/subject, or a different subject altogether.\n\nPROPOSED STORY:\n${JSON.stringify({headline:story?.headline,subheadline:story?.subheadline,subject_name:story?.subject_name,why_now:story?.why_now,body_excerpt:String(story?.body||'').replace(/\s+/g,' ').slice(0,1400),sources:story?.sources})}\n\nRECENT RELATED INDIE CUT COVERAGE:\n${JSON.stringify(prior)}\n\nReturn ONLY valid JSON: {"decision":"new_story|material_update|duplicate","reason":"brief explanation","matched_headline":"closest prior headline or blank"}.`;
+ try{
+  const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:`Bearer ${apiKey}`,'content-type':'application/json'},body:JSON.stringify({model:'gpt-5.6-luna',input:prompt,max_output_tokens:500})});
+  const json=await r.json().catch(()=>({}));if(!r.ok)throw new Error(json?.error?.message||'Coverage check failed.');
+  const parsed=parseJson(textFromResponse(json));const decision=String(parsed?.decision||'').toLowerCase();
+  if(!['new_story','material_update','duplicate'].includes(decision))throw new Error('Invalid coverage decision');
+  return {decision,reason:String(parsed?.reason||'').trim(),matched_headline:String(parsed?.matched_headline||'').trim()};
+ }catch{
+  const hardDuplicate=prior.find((row:any)=>cleanSlug(row.headline)===cleanSlug(story?.headline)||titleSimilarity(row.headline,String(story?.headline||''))>=0.78);
+  return hardDuplicate?{decision:'duplicate',reason:'Fallback duplicate check matched prior Indie Cut coverage.',matched_headline:hardDuplicate.headline}:{decision:'new_story',reason:'Semantic coverage check unavailable; no hard duplicate matched.',matched_headline:''};
+ }
+}
 async function readConfig(supabase:any){const {data}=await supabase.from('site_settings').select('setting_value').eq('setting_key',KEY).maybeSingle();if(!data?.setting_value)return DEFAULTS;try{return {...DEFAULTS,...JSON.parse(data.setting_value),enabled:true}}catch{return DEFAULTS}}
 
 async function callResearchModel(apiKey:string,prompt:string,maxOutputTokens=28000){
@@ -93,7 +118,7 @@ export async function POST(request:Request){
  const directAssignment=Boolean(requestedTopic);
  const topic=String(requestedTopic||config.default_topic||DEFAULTS.default_topic).trim().slice(0,2000);
  const count=Math.min(12,Math.max(1,Number(input.count||config.default_count||3)));
- const {data:existingRows}=await supabase.from('articles').select('headline,slug').order('created_at',{ascending:false}).limit(250);const existing=(existingRows||[]).map((x:any)=>x.headline).join(' | ');
+ const {data:existingRows}=await supabase.from('articles').select('headline,slug,subheadline,subject_name,body,created_at,published_at').order('created_at',{ascending:false}).limit(250);const existing=(existingRows||[]).map((x:any)=>x.headline).join(' | ');
  const assignmentMode=directAssignment?`\n\nEDITOR-DIRECTED ASSIGNMENT — THIS OVERRIDES TREND DISCOVERY:\nThe editor explicitly typed the assignment above. Treat it as a command, not a suggestion. You MUST research and write about the requested subject. Do NOT replace it with a more famous artist, broader trend or unrelated breaking story. If the editor names a person, artist, group, film, show, company or project, search that exact name first, then spelling variants, aliases and connected releases/projects.\n\nFor niche, regional and independent artists, search beyond national entertainment trades. Useful sources can include the artist's official site, label/management pages, verified Facebook/Instagram/X profiles, official YouTube channel, Bandcamp, Spotify/Apple Music artist pages, interviews, venue/festival listings, radio-station coverage, regional newspapers, local TV, music blogs with clear authorship, and other directly attributable pages. Use those sources carefully; do not turn promotional claims into facts without attribution.\n\nA lack of mainstream press is NOT a reason to skip the assignment. Indie Cut should be able to cover independent and emerging talent. If two independent credible sources are unavailable, still create the strongest responsible draft from the credible material you can find and mark verification_status not_verified. If a fact is only supported by the artist's own page, attribute it in the prose where appropriate. Never invent biography, hometown, discography, chart positions, collaborations, awards or quotes.\n\nFor a named artist/profile request, the article does not need a breaking-news peg. A legitimate editorial angle can be the artist's sound, career path, current music, catalog, Southern soul scene, regional following, live circuit or independent rise. Return at least ONE complete story about the requested subject whenever enough public information exists.`:'';
  const prompt=`You are the Indie Cut entertainment newsroom's research editor. Today is ${todayLabel()}. Research this assignment: ${topic}.${assignmentMode}
 
@@ -132,7 +157,14 @@ WRITING RULES:
 - Body should normally be 5-8 substantial paragraphs, 450-800 words when enough material exists.
 - Reader-facing headline, subheadline and body must contain NO URLs, hyperlinks, Markdown links, citation markers, footnotes, bracket citations, source-domain parentheticals. Research links belong ONLY in sources.
 
-Avoid duplicating or merely reframing these existing Indie Cut stories: ${existing||'none yet'}. For direct assignments, reject only an exact or materially identical existing angle; a genuinely new profile or feature is allowed.
+COVERAGE FRESHNESS RULE — IMPORTANT:
+- Do NOT reject a story merely because Indie Cut has covered the same person before.
+- Reject the same underlying event, situation or angle when there is no genuinely new fact.
+- A different headline or a different source repeating the same event is still a duplicate.
+- A continuing situation may be covered again ONLY when there is a material factual update that happened after the prior story and advances what readers know.
+- A meaningfully different event or editorial angle about the same person is allowed.
+
+Avoid duplicating or merely reframing these existing Indie Cut stories: ${existing||'none yet'}.
 
 IMAGE RULES:
 Locate one strong editorial image when possible. For artist assignments, official artist/label/management press imagery and images from the artist's verified official channels are acceptable when attributable. Do not use random fan reposts, search-result thumbnails, watermarked stock images or unattributable images. If uncertain, leave image fields blank. A lead video does NOT replace the featured image; keep a useful featured image for homepage cards and social sharing whenever possible.
@@ -145,10 +177,11 @@ Return ONLY valid JSON: {"stories":[{"headline":"","subheadline":"","category":"
  for(const s of stories){
   const headline=String(s?.headline||'').trim();if(!headline){rejected.push({headline:'Untitled',reason:'No headline returned'});continue}
   const slug=cleanSlug(headline);
-  const nearDuplicate=directAssignment
-   ?(existingRows||[]).find((x:any)=>cleanSlug(x.slug||x.headline)===slug||String(x.headline||'').trim().toLowerCase()===headline.toLowerCase())
-   :(existingRows||[]).find((x:any)=>cleanSlug(x.slug||x.headline)===slug||String(x.headline||'').trim().toLowerCase()===headline.toLowerCase()||titleSimilarity(String(x.headline||''),headline)>=0.72);
-  const duplicate=Boolean(nearDuplicate)||created.some((x:any)=>x.slug===slug||(!directAssignment&&titleSimilarity(x.headline,headline)>=0.72));if(duplicate){rejected.push({headline,reason:'Duplicate or near-duplicate of existing coverage'});continue}
+  const hardDuplicate=(existingRows||[]).find((x:any)=>cleanSlug(x.slug||x.headline)===slug||String(x.headline||'').trim().toLowerCase()===headline.toLowerCase());
+  if(hardDuplicate){rejected.push({headline,reason:'Duplicate of existing Indie Cut coverage',matched_headline:hardDuplicate.headline});continue}
+  const coverage=await runCoverageGate(apiKey,s,existingRows||[]);
+  if(coverage.decision==='duplicate'){rejected.push({headline,reason:'Same story/event already covered with no material update',matched_headline:coverage.matched_headline,coverage_reason:coverage.reason});continue}
+  const duplicateInRun=created.some((x:any)=>x.slug===slug||titleSimilarity(x.headline,headline)>=0.78);if(duplicateInRun){rejected.push({headline,reason:'Duplicate or near-duplicate of another story in this run'});continue}
   const sources=Array.isArray(s?.sources)?s.sources.map((x:any)=>String(x).trim()).filter((x:string)=>/^https?:\/\//i.test(x)):[];
   const imageUrl=validUrl(s?.featured_image_url);
   const imageSource=validUrl(s?.featured_image_source_url);
@@ -166,7 +199,7 @@ Return ONLY valid JSON: {"stories":[{"headline":"","subheadline":"","category":"
   if(body.length<minimumBodyLength){rejected.push({headline,reason:directAssignment?'Draft did not contain enough supportable material yet':'Draft was too thin to meet Indie Cut editorial depth standards'});continue}
   const payload={headline,slug,subheadline:String(s?.subheadline||'').trim()||null,category:String(s?.category||'culture').trim().toLowerCase(),subject_name:String(s?.subject_name||'').trim()||null,body,featured_media_url:imageUrl||null,lead_video_url:leadVideoUrl||null,lead_video_source_url:leadVideoUrl?(leadVideoSource||null):null,sources,verification_status:verificationStatus,status:'draft',published_at:null};
   const {error}=await supabase.from('articles').insert(payload);if(error){rejected.push({headline,reason:error.message});continue}
-  created.push({headline,slug,category:payload.category,sources:sources.length,source_hosts:diverseSources,image:imageUrl||null,image_source:imageSource||null,lead_video:leadVideoUrl||null,lead_video_source:leadVideoSource||null,verification_status:verificationStatus,verification_note:note,why_now:String(s?.why_now||''),news_score:Number(s?.news_score||0)});
+  created.push({headline,slug,category:payload.category,sources:sources.length,source_hosts:diverseSources,image:imageUrl||null,image_source:imageSource||null,lead_video:leadVideoUrl||null,lead_video_source:leadVideoSource||null,verification_status:verificationStatus,verification_note:note,why_now:String(s?.why_now||''),news_score:Number(s?.news_score||0),coverage_decision:coverage.decision,coverage_reason:coverage.reason,matched_headline:coverage.matched_headline});
  }
- return NextResponse.json({requested:count,created,rejected,mode:directAssignment?'direct_assignment':'discovery',editorial_pipeline:'research + feature rewrite + internal fact-check + optional lead video'});
+ return NextResponse.json({requested:count,created,rejected,mode:directAssignment?'direct_assignment':'discovery',editorial_pipeline:'research + feature rewrite + internal fact-check + story-level duplicate/material-update gate + optional lead video'});
 }
