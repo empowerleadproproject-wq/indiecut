@@ -12,6 +12,7 @@ type Ad={
  creative_url:string;
  creative_media_type:string;
  destination_url:string;
+ cta_text:string;
  placement:string;
  start_date:string;
  end_date:string;
@@ -27,7 +28,7 @@ type Ad={
 };
 
 const empty:Ad={
- advertiser:'',title:'',creative_url:'',creative_media_type:'',destination_url:'',placement:'video-midroll',
+ advertiser:'',title:'',creative_url:'',creative_media_type:'',destination_url:'',cta_text:'Learn More',placement:'video-midroll',
  start_date:'',end_date:'',active:true,target_mode:'global',target_zip:'',target_city:'',target_region:'',
  radius_miles:20,target_latitude:'',target_longitude:''
 };
@@ -55,7 +56,7 @@ export default function AdvertisingManager(){
   const r=await fetch('/api/admin/data?section=advertising');
   const t=await r.text();
   let j:any={};try{j=JSON.parse(t)}catch{}
-  if(r.ok)setRows((j.rows||[]).map((x:any)=>({...empty,...x,target_mode:normalizeMode(x.target_mode)})));
+  if(r.ok)setRows((j.rows||[]).map((x:any)=>({...empty,...x,cta_text:String(x.cta_text||'Learn More'),target_mode:normalizeMode(x.target_mode)})));
   else setMessage(j.error||t||'Unable to load ads');
  }
  useEffect(()=>{load()},[]);
@@ -106,13 +107,16 @@ export default function AdvertisingManager(){
   if(uploading)return setMessage('Wait for upload to finish.');
   if(!form.creative_url)return setMessage('Upload the ad first.');
   if(form.placement==='video-midroll'&&!form.creative_media_type.startsWith('video/'))return setMessage('Streaming mid-roll ads must use video.');
+  if(form.destination_url.trim()&&!form.cta_text.trim())return setMessage('Enter CTA button text, such as Learn More, Shop Now, or Order Now.');
+  if(form.cta_text.trim().length>40)return setMessage('CTA button text must be 40 characters or less.');
   if(form.target_mode!=='global'){
    if(!form.target_zip.trim()||!form.target_latitude.trim()||!form.target_longitude.trim())return setMessage('For Local or Both, enter a ZIP code and click LOOK UP ZIP before saving.');
    if(!Number.isFinite(Number(form.radius_miles))||form.radius_miles<1||form.radius_miles>250)return setMessage('Radius must be between 1 and 250 miles.');
   }
   setBusy(true);
   try{
-   const data=form.target_mode==='global'?{...form,target_zip:'',target_city:'',target_region:'',target_latitude:'',target_longitude:''}:form;
+   const base={...form,cta_text:form.cta_text.trim()||'Learn More'};
+   const data=form.target_mode==='global'?{...base,target_zip:'',target_city:'',target_region:'',target_latitude:'',target_longitude:''}:base;
    const r=await fetch('/api/admin/data',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({section:'advertising',data})});
    const j=await r.json();
    if(!r.ok)throw new Error(j.error||'Save failed');
@@ -138,7 +142,13 @@ export default function AdvertisingManager(){
     <br/>
     <label style={{display:'inline-block',padding:'11px 15px',background:'#111',color:'#fff',fontWeight:800,cursor:'pointer'}}>{uploading?'UPLOADING…':'UPLOAD IMAGE / VIDEO'}<input type="file" accept="image/*,video/*" hidden disabled={uploading} onChange={e=>upload(e.target.files?.[0])}/></label>
    </div>
-   <label>Destination URL<input type="url" value={form.destination_url} onChange={e=>setForm({...form,destination_url:e.target.value})}/></label>
+   <label>Destination URL<input type="url" placeholder="https://advertiser.com/offer" value={form.destination_url} onChange={e=>setForm({...form,destination_url:e.target.value})}/></label>
+   <label>CTA Button Text
+    <input list="ad-cta-suggestions" maxLength={40} placeholder="Learn More" value={form.cta_text} onChange={e=>setForm({...form,cta_text:e.target.value})}/>
+    <datalist id="ad-cta-suggestions"><option value="Learn More"/><option value="Shop Now"/><option value="Order Now"/><option value="Book Now"/><option value="Get Offer"/><option value="Visit Website"/><option value="Sign Up"/><option value="Watch Now"/></datalist>
+    <small style={{display:'block',marginTop:5}}>This text appears on the clickable button over the video ad.</small>
+   </label>
+   {form.destination_url&&<div style={{padding:14,border:'1px solid #e1e1e1',borderRadius:12,background:'#f8f8f8'}}><div style={{fontSize:12,fontWeight:800,marginBottom:8,color:'#555'}}>CTA PREVIEW</div><span style={{display:'inline-flex',alignItems:'center',gap:8,padding:'11px 18px',borderRadius:999,background:'#fff',color:'#111',fontSize:13,fontWeight:900,boxShadow:'0 8px 24px rgba(0,0,0,.14)',border:'1px solid rgba(0,0,0,.08)'}}>{form.cta_text.trim()||'Learn More'} <span aria-hidden="true">↗</span></span></div>}
    <label>Placement<select value={form.placement} onChange={e=>setForm({...form,placement:e.target.value})}><option value="video-midroll">Indie Cut Watch — streaming commercial</option><option value="sitewide">Sitewide</option><option value="right-rail">Right rail</option><option value="homepage">Homepage</option><option value="article-inline">Article inline</option><option value="article-top">Article top</option><option value="battle-artist">Battle artist voting page</option><option value="battle-room">Live Battle Room sponsor</option></select></label>
    <div style={{padding:12,background:'#fafafa',border:'1px solid #ddd'}}>Streaming commercials currently run every 6 minutes and resume the program automatically.</div>
    <label>Audience
@@ -163,6 +173,6 @@ export default function AdvertisingManager(){
    <button disabled={busy||uploading}>{busy?'SAVING…':'SAVE AD'}</button>
    {message&&<div className="ic-message">{message}</div>}
   </form>
-  <div style={{marginTop:30}}><h2>Existing Ad Units</h2>{rows.map(r=><div key={r._id} style={{padding:'12px 0',borderBottom:'1px solid #ddd'}}><strong>{r.title||r.advertiser}</strong> · {r.placement} · {audienceSummary(r)} · {r.active?'Active':'Inactive'} <button type="button" onClick={()=>remove(r._id)}>Delete</button></div>)}</div>
+  <div style={{marginTop:30}}><h2>Existing Ad Units</h2>{rows.map(r=><div key={r._id} style={{padding:'12px 0',borderBottom:'1px solid #ddd'}}><strong>{r.title||r.advertiser}</strong> · {r.placement} · {audienceSummary(r)} · CTA: {r.cta_text||'Learn More'} · {r.active?'Active':'Inactive'} <button type="button" onClick={()=>remove(r._id)}>Delete</button></div>)}</div>
  </section>;
 }
