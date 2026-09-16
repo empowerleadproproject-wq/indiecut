@@ -10,6 +10,7 @@ export async function POST(request:Request){
   try{
     const user=await getAuthenticatedRewardsUser();
     if(!user)return NextResponse.json({error:'Sign in to activate Watch & Earn.'},{status:401});
+    if(!user.email_confirmed_at)return NextResponse.json({error:'Confirm your email address before activating Watch & Earn.'},{status:403});
 
     const body=await request.json().catch(()=>({}));
     if(body?.ageConfirmed!==true)return NextResponse.json({error:'You must confirm that you are 18 or older.'},{status:400});
