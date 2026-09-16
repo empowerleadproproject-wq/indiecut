@@ -20,7 +20,6 @@ export default function AdSupportedVideo({src,poster,breakMode='interval',interv
  function checkBreak(){const program=contentRef.current;if(!program||activeRef.current||!ads.length||breakMode==='none')return;const t=program.currentTime;if(breakMode==='interval'){const breakNo=Math.floor(t/interval);if(breakNo>=1){const key=`i:${breakNo}`;if(!playedRef.current.has(key))void playAd(key)}return}for(const at of customTimes){const key=`c:${at}`;if(t>=at&&!playedRef.current.has(key)){void playAd(key);break}}}
  function adTime(){const a=adRef.current;if(a&&Number.isFinite(a.duration))setCountdown(Math.max(0,Math.ceil(a.duration-a.currentTime)))}
  async function toggleFullscreen(){const player=playerRef.current;if(!player)return;try{if(document.fullscreenElement)await document.exitFullscreen();else await player.requestFullscreen()}catch{}}
- const scheduleLabel=breakMode==='none'?'NO ADS':breakMode==='custom'?'CUSTOM AD BREAKS':`ADS EVERY ${Math.max(1,Number(intervalMinutes)||6)} MIN`;
  return <div ref={playerRef} style={{position:'relative',width:'100%',height:fullscreen?'100vh':'auto',background:'#000',overflow:'hidden',display:'grid',placeItems:'center'}}>
   <video ref={contentRef} src={src} poster={poster} controls={!activeAd} controlsList="nofullscreen" disablePictureInPicture playsInline preload="metadata" onTimeUpdate={checkBreak} onSeeked={checkBreak} style={{width:'100%',height:fullscreen?'100%':'auto',aspectRatio:fullscreen?undefined:'16/9',maxHeight:fullscreen?'100vh':720,background:'#000',objectFit:'contain',display:'block'}}/>
   {!activeAd&&<button type="button" onClick={toggleFullscreen} aria-label={fullscreen?'Exit Indie Cut fullscreen':'Indie Cut fullscreen'} title={fullscreen?'Exit fullscreen':'Fullscreen'} style={{position:'absolute',right:12,bottom:fullscreen?18:48,zIndex:50,width:42,height:38,border:'1px solid rgba(255,255,255,.35)',borderRadius:4,background:'rgba(0,0,0,.78)',color:'#fff',fontSize:22,cursor:'pointer',display:'grid',placeItems:'center'}}>{fullscreen?'↙':'⛶'}</button>}
@@ -29,6 +28,5 @@ export default function AdSupportedVideo({src,poster,breakMode='interval',interv
    <div style={{position:'absolute',left:14,top:12,padding:'6px 9px',background:'rgba(0,0,0,.72)',color:'#fff',fontSize:12,fontWeight:800,letterSpacing:'.06em'}}>ADVERTISEMENT{countdown>0?` · ${countdown}s`:''}</div>
    {activeAd.destination_url&&<a href={activeAd.destination_url} target="_blank" rel="noreferrer" style={{position:'absolute',right:14,bottom:14,padding:'9px 13px',background:'#fff',color:'#111',fontSize:12,fontWeight:900,textDecoration:'none'}}>LEARN MORE</a>}
   </div>}
-  {breakMode!=='none'&&ads.length>0&&!activeAd&&<div style={{position:'absolute',right:58,top:10,padding:'5px 8px',background:'rgba(0,0,0,.6)',color:'#fff',fontSize:10,fontWeight:800,zIndex:45}}>{scheduleLabel}</div>}
  </div>
 }
