@@ -1,9 +1,10 @@
 export type VisitorGeo={country:string;region:string;city:string;postalCode:string;latitude:number|null;longitude:number|null};
+export type AdTargetMode='global'|'local'|'both';
 type HeaderLike={get:(name:string)=>string|null};
 
 function clean(v:any){return String(v||'').trim()}
 function upper(v:any){return clean(v).toUpperCase()}
-function numberOrNull(v:any){const n=Number(v);return Number.isFinite(n)?n:null}
+function numberOrNull(v:any){const s=clean(v);if(!s)return null;const n=Number(s);return Number.isFinite(n)?n:null}
 function decodeCity(v:string){try{return decodeURIComponent(v)}catch{return v}}
 
 export function visitorGeoFromHeaders(h:HeaderLike):VisitorGeo{
@@ -18,7 +19,12 @@ export function visitorGeoFromHeaders(h:HeaderLike):VisitorGeo{
 }
 export function visitorGeo(request:Request):VisitorGeo{return visitorGeoFromHeaders(request.headers)}
 
-export function isLocalTarget(row:any){return String(row?.target_mode||'global').toLowerCase()==='local'}
+export function targetMode(row:any):AdTargetMode{
+ const value=String(row?.target_mode||'global').toLowerCase();
+ return value==='local'||value==='both'?value:'global';
+}
+
+export function isLocalTarget(row:any){const mode=targetMode(row);return mode==='local'||mode==='both'}
 
 function milesBetween(lat1:number,lon1:number,lat2:number,lon2:number){
  const r=3958.7613;
@@ -28,8 +34,7 @@ function milesBetween(lat1:number,lon1:number,lat2:number,lon2:number){
  return r*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
 }
 
-export function audienceMatches(row:any,geo:VisitorGeo){
- if(!isLocalTarget(row))return true;
+export function localAreaMatches(row:any,geo:VisitorGeo){
  const radius=Math.max(1,Number(row?.radius_miles)||20);
  const targetLat=numberOrNull(row?.target_latitude),targetLon=numberOrNull(row?.target_longitude);
  if(targetLat!==null&&targetLon!==null&&geo.latitude!==null&&geo.longitude!==null){
@@ -43,12 +48,31 @@ export function audienceMatches(row:any,geo:VisitorGeo){
  return false;
 }
 
-export function audienceLabel(row:any){
- if(!isLocalTarget(row))return 'Global';
- const place=[clean(row?.target_zip),clean(row?.target_city),upper(row?.target_region)].filter(Boolean).join(' · ');
- return `${place||'Local'} +${Math.max(1,Number(row?.radius_miles)||20)} mi`;
+export function audienceMatches(row:any,geo:VisitorGeo){
+ const mode=targetMode(row);
+ if(mode==='global'||mode==='both')return true;
+ return localAreaMatches(row,geo);
 }
 
-export function sortLocalFirst<T extends Record<string,any>>(rows:T[]){
- return [...rows].sort((a,b)=>Number(isLocalTarget(b))-Number(isLocalTarget(a)));
+export function effectiveAudienceScope(row:any,geo:VisitorGeo):'local'|'global'{
+ const mode=targetMode(row);
+ if(mode==='local')return 'local';
+ if(mode==='both'&&localAreaMatches(row,geo))return 'local';
+ return 'global';
+}
+
+export function audienceLabel(row:any){
+ const mode=targetMode(row);
+ if(mode==='global')return 'Global';
+ const place=[clean(row?.target_city),upper(row?.target_region),clean(row?.target_zip)].filter(Boolean).join(' · ');
+ const local=`${place||'Local'} · ${Math.max(1,Number(row?.radius_miles)||20)} mi`;
+ return mode==='both'?`Both — global + local priority (${local})`:`Local — ${local}`;
+}
+
+export function sortLocalFirst<T extends Record<string,any>>(rows:T[],geo?:VisitorGeo){
+ const score=(row:T)=>{
+  if(geo)return effectiveAudienceScope(row,geo)==='local'?1:0;
+  const mode=targetMode(row);return mode==='local'?2:mode==='both'?1:0;
+ };
+ return [...rows].sort((a,b)=>score(b)-score(a));
 }
