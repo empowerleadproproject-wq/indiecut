@@ -88,8 +88,8 @@ export default function RewardsActivationForm(){
       const response=await fetch('/api/rewards/otp/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:cleanCode,deviceId})});
       const json=await response.json();
       if(!response.ok)throw new Error(json?.error||'Unable to verify code.');
-      setData(current=>current?{...current,profile:{...(current.profile||{} as ViewerProfile),id:current.profile?.id||'',status:'active',phone_last4:String(json.phoneLast4||last4),phone_verified_at:new Date().toISOString(),age_attested_at:current.profile?.age_attested_at||new Date().toISOString(),terms_version:current.profile?.terms_version||'2026-09-16-v1',terms_accepted_at:current.profile?.terms_accepted_at||new Date().toISOString(),privacy_version:current.profile?.privacy_version||'2026-09-16-v1',privacy_accepted_at:current.profile?.privacy_accepted_at||new Date().toISOString()}}:current);
       setLast4(String(json.phoneLast4||last4));
+      await loadProfile();
       show('Your Watch & Earn rewards identity is active.','success');
     }catch(error:any){show(String(error?.message||'Unable to verify code.'));}
     finally{setLoading(false);}
