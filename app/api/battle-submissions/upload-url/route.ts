@@ -1,11 +1,22 @@
 import {NextResponse} from 'next/server';
 import {createHash} from 'crypto';
+import {S3Client,PutObjectCommand} from '@aws-sdk/client-s3';
+import {getSignedUrl} from '@aws-sdk/s3-request-presigner';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
 
 export const runtime='nodejs';
 
 function ipFor(request:Request){return String(request.headers.get('x-forwarded-for')||request.headers.get('x-real-ip')||'unknown').split(',')[0].trim()}
 function hash(value:string){return createHash('sha256').update(value).digest('hex')}
+function ext(fileName:string){return fileName.includes('.')?'.'+fileName.split('.').pop()!.replace(/[^a-z0-9]/gi,'').toLowerCase():''}
+function r2Config(){
+ const accountId=process.env.CLOUDFLARE_R2_ACCOUNT_ID||'';
+ const accessKeyId=process.env.CLOUDFLARE_R2_ACCESS_KEY_ID||'';
+ const secretAccessKey=process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY||'';
+ const bucket=process.env.CLOUDFLARE_R2_BUCKET||'';
+ const publicBase=(process.env.CLOUDFLARE_R2_PUBLIC_URL||'').replace(/\/$/,'');
+ return accountId&&accessKeyId&&secretAccessKey&&bucket&&publicBase?{accountId,accessKeyId,secretAccessKey,bucket,publicBase}:null;
+}
 
 export async function POST(request:Request){
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)return NextResponse.json({error:'Upload service is not configured.'},{status:503});
@@ -14,7 +25,19 @@ export async function POST(request:Request){
  const max=isImage?8*1024*1024:100*1024*1024;if(size<=0||size>max)return NextResponse.json({error:isImage?'Artist photo must be 8 MB or smaller.':'Song upload must be 100 MB or smaller.'},{status:413});
  const db=createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});const ipHash=hash(ipFor(request));const now=Date.now();
  const {data:rateRow}=await db.from('site_settings').select('setting_value').eq('setting_key','battle_upload_issuances').maybeSingle();let rates:any[]=[];try{rates=JSON.parse(rateRow?.setting_value||'[]')}catch{}rates=rates.filter(x=>new Date(x.at||0).getTime()>now-24*60*60*1000);if(rates.filter(x=>x.ip_hash===ipHash).length>=8)return NextResponse.json({error:'Upload limit reached for today.'},{status:429});
+
+ if(isAudio){
+  const cfg=r2Config();
+  if(cfg){
+   const path=`indiecut/audio/battle-submissions/${new Date().toISOString().slice(0,10)}/${crypto.randomUUID()}${ext(fileName)}`;
+   const s3=new S3Client({region:'auto',endpoint:`https://${cfg.accountId}.r2.cloudflarestorage.com`,credentials:{accessKeyId:cfg.accessKeyId,secretAccessKey:cfg.secretAccessKey}});
+   const signedUrl=await getSignedUrl(s3,new PutObjectCommand({Bucket:cfg.bucket,Key:path,ContentType:mime||'application/octet-stream'}),{expiresIn:3600});
+   rates.push({ip_hash:ipHash,at:new Date().toISOString()});await db.from('site_settings').upsert({setting_key:'battle_upload_issuances',setting_value:JSON.stringify(rates.slice(-1000)),updated_at:new Date().toISOString()},{onConflict:'setting_key'});
+   return NextResponse.json({provider:'r2',path,signedUrl,publicUrl:`${cfg.publicBase}/${path}`,contentType:mime});
+  }
+ }
+
  const bucket='indiecut-media';const {data:buckets}=await db.storage.listBuckets();if(!(buckets||[]).some((b:any)=>b.name===bucket)){const {error:createError}=await db.storage.createBucket(bucket,{public:true,fileSizeLimit:104857600});if(createError&&!String(createError.message).toLowerCase().includes('already'))return NextResponse.json({error:createError.message},{status:400})}
- const ext=fileName.includes('.')?'.'+fileName.split('.').pop()!.replace(/[^a-z0-9]/gi,'').toLowerCase():'';const path=`battle-submissions/${new Date().toISOString().slice(0,10)}/${crypto.randomUUID()}${ext}`;const {data:signed,error}=await db.storage.from(bucket).createSignedUploadUrl(path);if(error||!signed)return NextResponse.json({error:error?.message||'Unable to create upload URL'},{status:400});
- rates.push({ip_hash:ipHash,at:new Date().toISOString()});await db.from('site_settings').upsert({setting_key:'battle_upload_issuances',setting_value:JSON.stringify(rates.slice(-1000)),updated_at:new Date().toISOString()},{onConflict:'setting_key'});const {data:pub}=db.storage.from(bucket).getPublicUrl(path);return NextResponse.json({bucket,path,token:signed.token,publicUrl:pub.publicUrl});
+ const path=`battle-submissions/${new Date().toISOString().slice(0,10)}/${crypto.randomUUID()}${ext(fileName)}`;const {data:signed,error}=await db.storage.from(bucket).createSignedUploadUrl(path);if(error||!signed)return NextResponse.json({error:error?.message||'Unable to create upload URL'},{status:400});
+ rates.push({ip_hash:ipHash,at:new Date().toISOString()});await db.from('site_settings').upsert({setting_key:'battle_upload_issuances',setting_value:JSON.stringify(rates.slice(-1000)),updated_at:new Date().toISOString()},{onConflict:'setting_key'});const {data:pub}=db.storage.from(bucket).getPublicUrl(path);return NextResponse.json({provider:'supabase',bucket,path,token:signed.token,signedUrl:signed.signedUrl,publicUrl:pub.publicUrl});
 }
