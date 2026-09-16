@@ -46,16 +46,26 @@ export async function POST(request:Request){
  const count=Math.min(10,Math.max(5,Number(input.count||8)));
  const {data:settingRow}=await db.from('site_settings').select('setting_value').eq('setting_key',KEY).maybeSingle();let prior:any={};try{prior=JSON.parse(settingRow?.setting_value||'{}')}catch{}
  const dismissed=new Set((Array.isArray(prior.dismissed)?prior.dismissed:[]).map(keyFor));
- const {data:existingRows}=await db.from('articles').select('headline').order('created_at',{ascending:false}).limit(80);
- const existing=(existingRows||[]).map((x:any)=>x.headline).filter(Boolean).join(' | ');
+ const {data:existingRows}=await db.from('articles').select('headline,subheadline,subject_name,body,created_at,published_at').order('created_at',{ascending:false}).limit(80);
+ const existingContext=(existingRows||[]).map((x:any)=>({headline:x.headline,subheadline:x.subheadline||'',subject_name:x.subject_name||'',published_at:x.published_at||x.created_at||'',body_excerpt:String(x.body||'').replace(/\s+/g,' ').slice(0,320)}));
  const now=new Date().toISOString();
  const prompt=`You are Indie Cut's BREAKING NEWS RADAR. Search the live web for CURRENT entertainment news and fill the editor queue with useful leads. PRIORITIZE ${focus}, especially Black entertainment, hip-hop, R&B, film, television, celebrities, creators and culture, BUT DO NOT restrict results to that niche. If there are not enough stories in that focus, include major general entertainment, music, film, TV, celebrity, streaming, awards, festival, casting, release, business and culture developments.
 
 Freshness rules: first look for stories first reported or materially updated in the last ${hours} hours. If that does not produce at least 3 credible leads, expand to the last 24 hours. If there are still fewer than 3, expand to the last 48 hours for stories that are still current, developing, newly announced or strongly newsworthy. Do not return an empty list merely because a story is not "breaking" enough. If credible current entertainment news exists, return it.
 
-Return up to ${count} useful leads ranked by urgency and editorial value, and aim for AT LEAST 3 leads whenever credible current entertainment news exists. Do not invent or predict news. Exclude rumors, blind items, unsupported social posts, fan speculation, recycled stories with no new development and opinion pieces presented as breaking news. Prefer primary sources and reputable entertainment/news outlets. A lead needs only ONE credible source to enter the queue. Mark VERIFIED when the central claim is supported by at least two credible source URLs, or one authoritative primary source plus credible corroboration. Otherwise mark needs_verification so the editor can review it. Avoid Indie Cut stories already covered: ${existing||'none'}.
+COVERAGE FRESHNESS RULE — CRITICAL:
+- Same PERSON is allowed. Same STORY is not.
+- If Indie Cut covered Lil Durk yesterday and a genuinely different Lil Durk event happens today, that is eligible.
+- If another outlet simply republishes or reframes the same Lil Durk event Indie Cut already covered, reject it.
+- A continuing story is eligible only when there is a MATERIAL UPDATE: a concrete new fact or development that happened after prior coverage and advances the situation.
+- New commentary, a rewritten headline, a different source repeating old facts, or a recap is NOT a material update.
+- For any continuing story you return, why_breaking must explicitly state the new fact that makes it an update.
 
-Return ONLY valid JSON with this shape: {"leads":[{"headline":"suggested original Indie Cut headline","summary":"1-3 sentence factual summary","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","why_breaking":"why this matters now","source_published_at":"ISO-8601 timestamp if available","urgency_score":0,"verification_status":"verified|needs_verification","verification_note":"brief explanation","sources":["https://...","https://..."],"image_url":"optional trustworthy editorial image URL or blank"}]}. Current UTC time: ${now}.`;
+RECENT INDIE CUT COVERAGE TO COMPARE AGAINST:\n${JSON.stringify(existingContext)}
+
+Return up to ${count} useful leads ranked by urgency and editorial value, and aim for AT LEAST 3 leads whenever credible current entertainment news exists. Do not invent or predict news. Exclude rumors, blind items, unsupported social posts, fan speculation, recycled stories with no new development and opinion pieces presented as breaking news. Prefer primary sources and reputable entertainment/news outlets. A lead needs only ONE credible source to enter the queue. Mark VERIFIED when the central claim is supported by at least two credible source URLs, or one authoritative primary source plus credible corroboration. Otherwise mark needs_verification so the editor can review it.
+
+Return ONLY valid JSON with this shape: {"leads":[{"headline":"suggested original Indie Cut headline","summary":"1-3 sentence factual summary","category":"movies|tv|music|culture|independent|celebrity","subject_name":"","why_breaking":"why this matters now and, for an update, the specific new fact","source_published_at":"ISO-8601 timestamp if available","urgency_score":0,"verification_status":"verified|needs_verification","verification_note":"brief explanation","sources":["https://...","https://..."],"image_url":"optional trustworthy editorial image URL or blank"}]}. Current UTC time: ${now}.`;
  const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{authorization:`Bearer ${apiKey}`,'content-type':'application/json'},body:JSON.stringify({model:'gpt-5.6-luna',tools:[{type:'web_search'}],input:prompt,max_output_tokens:5000})});
  const j=await r.json().catch(()=>({}));if(!r.ok)return NextResponse.json({error:j?.error?.message||'Breaking news research failed'},{status:502});
  let parsed:any;try{parsed=parseJson(textFromResponse(j))}catch{return NextResponse.json({error:'Breaking News Radar returned invalid data.'},{status:502})}
