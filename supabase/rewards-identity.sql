@@ -62,6 +62,7 @@ create table if not exists public.reward_audit_events (
   created_at timestamptz not null default now()
 );
 
+create index if not exists reward_terms_acceptances_profile_idx on public.reward_terms_acceptances(profile_id);
 create index if not exists reward_phone_otps_user_created_idx on public.reward_phone_otps(user_id, created_at desc);
 create index if not exists reward_phone_otps_phone_created_idx on public.reward_phone_otps(phone_hash, created_at desc);
 create index if not exists reward_devices_hash_idx on public.reward_devices(device_token_hash);
@@ -90,17 +91,23 @@ alter table public.reward_phone_otps enable row level security;
 alter table public.reward_devices enable row level security;
 alter table public.reward_audit_events enable row level security;
 
+revoke all on table public.reward_profiles from anon, authenticated;
+revoke all on table public.reward_terms_acceptances from anon, authenticated;
+revoke all on table public.reward_phone_otps from anon, authenticated;
+revoke all on table public.reward_devices from anon, authenticated;
+revoke all on table public.reward_audit_events from anon, authenticated;
+
 drop policy if exists "reward_profiles_select_own" on public.reward_profiles;
 create policy "reward_profiles_select_own"
 on public.reward_profiles for select
 to authenticated
-using (auth.uid() = user_id);
+using ((select auth.uid()) = user_id);
 
 drop policy if exists "reward_terms_select_own" on public.reward_terms_acceptances;
 create policy "reward_terms_select_own"
 on public.reward_terms_acceptances for select
 to authenticated
-using (auth.uid() = user_id);
+using ((select auth.uid()) = user_id);
 
 grant select on table public.reward_profiles to authenticated;
 grant select on table public.reward_terms_acceptances to authenticated;
