@@ -1,5 +1,5 @@
 import {NextResponse} from 'next/server';
-import {S3Client,PutObjectCommand} from '@aws-sdk/client-s3';
+import {S3Client,PutObjectCommand,DeleteObjectCommand} from '@aws-sdk/client-s3';
 import {getSignedUrl} from '@aws-sdk/s3-request-presigner';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
 import {createClient} from '../../../../lib/supabase/server';
@@ -7,9 +7,25 @@ import {isAdminEmail} from '../../../../lib/admin';
 export const runtime='nodejs';
 function r2Config(){const accountId=process.env.CLOUDFLARE_R2_ACCOUNT_ID||'',accessKeyId=process.env.CLOUDFLARE_R2_ACCESS_KEY_ID||'',secretAccessKey=process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY||'',bucket=process.env.CLOUDFLARE_R2_BUCKET||'',publicBase=(process.env.CLOUDFLARE_R2_PUBLIC_URL||'').replace(/\/$/,'');if(!accountId||!accessKeyId||!secretAccessKey||!bucket||!publicBase)return null;return {accountId,accessKeyId,secretAccessKey,bucket,publicBase}}
 function ext(n:string){return n.includes('.')?'.'+n.split('.').pop()!.replace(/[^a-z0-9]/gi,'').toLowerCase():''}
+function r2Error(e:any){const name=String(e?.name||'R2Error'),message=String(e?.message||'Cloudflare R2 rejected the request'),status=e?.$metadata?.httpStatusCode;return `${name}${status?` (${status})`:''}: ${message}`}
 export async function POST(request:Request){
  const auth=createClient();const {data:{user}}=await auth.auth.getUser();if(!user||!isAdminEmail(user.email))return NextResponse.json({error:'Unauthorized'},{status:401});
  const body=await request.json().catch(()=>null),fileName=String(body?.fileName||'upload.bin'),mime=String(body?.mime||'application/octet-stream'),size=Number(body?.size||0);const isImage=mime.startsWith('image/'),isVideo=mime.startsWith('video/'),isAudio=mime.startsWith('audio/');if(!isImage&&!isVideo&&!isAudio)return NextResponse.json({error:'Only image, video, and audio files can be uploaded.'},{status:400});if(size<=0)return NextResponse.json({error:'Invalid file size.'},{status:400});
- if(isVideo||isAudio){const cfg=r2Config();if(!cfg)return NextResponse.json({error:'Cloudflare R2 is not configured. Add the five CLOUDFLARE_R2_* environment variables in Vercel.'},{status:503});if(size>10*1024*1024*1024)return NextResponse.json({error:'Video/audio uploads must be 10 GB or smaller.'},{status:413});const path=`indiecut/${isVideo?'video':'audio'}/${new Date().toISOString().slice(0,10)}/${crypto.randomUUID()}${ext(fileName)}`;const s3=new S3Client({region:'auto',endpoint:`https://${cfg.accountId}.r2.cloudflarestorage.com`,credentials:{accessKeyId:cfg.accessKeyId,secretAccessKey:cfg.secretAccessKey}});/* Do not bind Content-Type into the SigV4 signature. Browsers can normalize media MIME values, and a signed Content-Type mismatch makes R2 return 403 before JavaScript can read the response through CORS. The bucket CORS policy still controls browser origins and PUT access. */const signedUrl=await getSignedUrl(s3,new PutObjectCommand({Bucket:cfg.bucket,Key:path}),{expiresIn:3600});return NextResponse.json({provider:'r2',path,signedUrl,publicUrl:`${cfg.publicBase}/${path}`,mediaType:isVideo?'video':'audio',method:'PUT',contentType:mime});}
+ if(isVideo||isAudio){
+  const cfg=r2Config();if(!cfg)return NextResponse.json({error:'Cloudflare R2 is not configured. Add the five CLOUDFLARE_R2_* environment variables in Vercel.'},{status:503});if(size>10*1024*1024*1024)return NextResponse.json({error:'Video/audio uploads must be 10 GB or smaller.'},{status:413});
+  const path=`indiecut/${isVideo?'video':'audio'}/${new Date().toISOString().slice(0,10)}/${crypto.randomUUID()}${ext(fileName)}`;
+  const s3=new S3Client({region:'auto',endpoint:`https://${cfg.accountId}.r2.cloudflarestorage.com`,credentials:{accessKeyId:cfg.accessKeyId,secretAccessKey:cfg.secretAccessKey}});
+  // Verify the exact Vercel credentials/account/bucket can really write to R2. Presigning alone does not contact R2, so bad credentials otherwise surface only as a vague browser "Failed to fetch".
+  const probeKey=`indiecut/.upload-check/${crypto.randomUUID()}.txt`;
+  try{
+   await s3.send(new PutObjectCommand({Bucket:cfg.bucket,Key:probeKey,Body:'ok',ContentType:'text/plain'}));
+   await s3.send(new DeleteObjectCommand({Bucket:cfg.bucket,Key:probeKey})).catch(()=>{});
+  }catch(e:any){
+   return NextResponse.json({error:`Cloudflare R2 write check failed. ${r2Error(e)} Check the R2 Account ID, Access Key ID, Secret Access Key, and bucket name in Vercel.`},{status:502});
+  }
+  // Keep Content-Type out of the signature so browser MIME normalization cannot invalidate SigV4.
+  const signedUrl=await getSignedUrl(s3,new PutObjectCommand({Bucket:cfg.bucket,Key:path}),{expiresIn:3600});
+  return NextResponse.json({provider:'r2',path,signedUrl,publicUrl:`${cfg.publicBase}/${path}`,mediaType:isVideo?'video':'audio',method:'PUT',contentType:mime});
+ }
  if(size>8*1024*1024)return NextResponse.json({error:'Image uploads must be 8 MB or smaller.'},{status:413});const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)return NextResponse.json({error:'Supabase service credentials missing'},{status:503});const db=createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}}),bucket='indiecut-media';const {data:buckets}=await db.storage.listBuckets();if(!(buckets||[]).some(b=>b.name===bucket)){const {error:e}=await db.storage.createBucket(bucket,{public:true,fileSizeLimit:8388608});if(e&&!String(e.message).toLowerCase().includes('already'))return NextResponse.json({error:e.message},{status:400});}const path=`admin/${new Date().toISOString().slice(0,10)}/${crypto.randomUUID()}${ext(fileName)}`,{data:signed,error}=await db.storage.from(bucket).createSignedUploadUrl(path);if(error||!signed)return NextResponse.json({error:error?.message||'Unable to create upload URL'},{status:400});const {data:pub}=db.storage.from(bucket).getPublicUrl(path);return NextResponse.json({provider:'supabase',bucket,path,token:signed.token,signedUrl:signed.signedUrl,publicUrl:pub.publicUrl,mediaType:'image'});
 }
