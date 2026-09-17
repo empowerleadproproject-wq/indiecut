@@ -2,16 +2,17 @@
 
 import {FormEvent,useEffect,useMemo,useRef,useState} from 'react';
 import styles from './thecut.module.css';
+import MemberProfileSheet from './MemberProfileSheet';
 import {createClient} from '../../lib/supabase/browser';
 
-type Person={id:string;name:string;avatar:string;role:'host'|'speaker'|'listener';handle?:string;followers?:string;following?:string;bio?:string;link?:string;own?:boolean;avatarIsUrl?:boolean};
+type Person={id:string;name:string;avatar:string;role:'host'|'speaker'|'listener';handle?:string;followers?:string;following?:string;bio?:string;link?:string;own?:boolean;avatarIsUrl?:boolean;accountId?:string;profileId?:string};
 type Room={id:string;slug:string;club:string;title:string;status:'live'|'upcoming'|'ended';people:Person[];listening:number};
 type Promo={name:string;message:string;link:string;minutes:number;image:string;mediaType:'brand'|'music';audio?:string;previewSeconds:number;endsAt:number};
 
 const fallbackMe:Person={id:'you',name:'You',avatar:'YOU',role:'listener',handle:'',followers:'0',following:'0',bio:'',own:true};
 
 function initials(name:string){return name.trim().split(/\s+/).slice(0,2).map(v=>v[0]?.toUpperCase()||'').join('')||'IC'}
-function normalizeRoom(raw:any):Room|null{if(!raw||!raw.slug)return null;const people=Array.isArray(raw.people)?raw.people.filter((p:any)=>p&&p.name).map((p:any)=>({id:String(p.id),name:String(p.name),avatar:p.avatar?String(p.avatar):initials(String(p.name)),avatarIsUrl:!!p.avatar,role:(p.role==='host'||p.role==='speaker'?p.role:'listener') as Person['role'],own:!!p.own})):[];return{id:String(raw.id),slug:String(raw.slug),club:String(raw.club||'THE CUT'),title:String(raw.title||'Live room'),status:(raw.status||'live') as Room['status'],people,listening:Number(raw.listening||0)}}
+function normalizeRoom(raw:any):Room|null{if(!raw||!raw.slug)return null;const people=Array.isArray(raw.people)?raw.people.filter((p:any)=>p&&p.name).map((p:any)=>({id:String(p.id),name:String(p.name),avatar:p.avatar?String(p.avatar):initials(String(p.name)),avatarIsUrl:!!p.avatar,role:(p.role==='host'||p.role==='speaker'?p.role:'listener') as Person['role'],own:!!p.own,accountId:p.account_id?String(p.account_id):undefined,profileId:p.profile_id?String(p.profile_id):undefined,handle:p.handle?String(p.handle):undefined,bio:p.bio?String(p.bio):undefined})):[];return{id:String(raw.id),slug:String(raw.slug),club:String(raw.club||'THE CUT'),title:String(raw.title||'Live room'),status:(raw.status||'live') as Room['status'],people,listening:Number(raw.listening||0)}}
 async function loadMe():Promise<Person>{try{const supabase=createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)return fallbackMe;const{data}=await supabase.from('cut_profiles').select('display_name,username,bio,avatar_url,website_url').eq('id',user.id).maybeSingle();const username=data?.username||'';const display=data?.display_name||username||user.email?.split('@')[0]||'You';return{id:user.id,name:display,avatar:data?.avatar_url||initials(display),avatarIsUrl:!!data?.avatar_url,role:'listener',handle:username?`@${username}`:'',followers:'0',following:'0',bio:data?.bio||'',link:data?.website_url||'',own:true}}catch{return fallbackMe}}
 function getClientId(){const key='indiecut_cut_client_id';let id=localStorage.getItem(key);if(!id){id=crypto.randomUUID();localStorage.setItem(key,id)}return id}
 
@@ -78,7 +79,7 @@ function LiveRoom({slug,me,back}:{slug:string;me:Person;back:()=>void}){
     {notice&&<div className={styles.roomNotice}>{notice}</div>}
     <section className={styles.peopleGrid}>{people.map(p=><button className={styles.person} key={p.id} onClick={()=>activePromo&&p.own?setPromoDetail(true):setProfile(p)}><Avatar p={p} host={p.role==='host'} promo={activePromo} onPromo={()=>setPromoDetail(true)}/><strong>{activePromo&&p.own?activePromo.name:p.name}</strong><span>{activePromo&&p.own?'Tap to view promotion':p.role==='host'?'Host':p.role==='speaker'?'Speaker':'Listener'}</span></button>)}</section>
     <footer className={styles.spaceDock}>{!joined?<><span className={styles.listenOnly}>You’re listening as a guest</span><button className={styles.joinSpace} onClick={requestJoin}>Join this Space</button></>:<><button className={styles.leaveQuiet} onClick={leave}>Leave quietly</button><button className={styles.promoteBtn} onClick={()=>setPromoOpen(true)}>Promote</button></>}</footer>
-    {profile&&<ProfileSheet person={profile} close={()=>setProfile(null)} promote={()=>{setProfile(null);setPromoOpen(true)}}/>}
+    {profile&&<MemberProfileSheet person={profile} clientId={clientId.current} close={()=>setProfile(null)} promote={()=>{setProfile(null);setPromoOpen(true)}}/>}
     {joinOpen&&<JoinAccountModal roomTitle={room.title} close={()=>setJoinOpen(false)} join={createAccountAndJoin}/>} 
     {promoOpen&&<PromoModal close={()=>setPromoOpen(false)} activate={p=>{setActivePromo(p);setPromoOpen(false);setPromoDetail(true)}}/>}
     {promoDetail&&activePromo&&<PromoDetail promo={activePromo} close={()=>setPromoDetail(false)}/>} 
