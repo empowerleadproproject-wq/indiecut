@@ -1,5 +1,6 @@
 import RoomTitleFontSync from './RoomTitleFontSync';
 import RoomHostGate from './RoomHostGate';
+import HallwayRooms from './HallwayRooms';
 
 export default function TheCutLayout({children}:{children:React.ReactNode}){
   return <div className="the-cut-font-root">
@@ -12,5 +13,6 @@ export default function TheCutLayout({children}:{children:React.ReactNode}){
       }
     `}</style>
     <RoomHostGate>{children}</RoomHostGate>
+    <HallwayRooms/>
   </div>;
 }
