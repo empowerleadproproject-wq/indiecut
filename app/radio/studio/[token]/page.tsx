@@ -1,0 +1,1 @@
+import RadioGuest from '../../../RadioGuest';export default function Page({params}:{params:{token:string}}){return <RadioGuest token={params.token}/>}
