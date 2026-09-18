@@ -1,6 +1,5 @@
 import RoomTitleFontSync from './RoomTitleFontSync';
 import RoomHostGate from './RoomHostGate';
-import HallwayRooms from './HallwayRooms';
 import RoomShareEnhancer from './RoomShareEnhancer';
 import CutBannerAds from './CutBannerAds';
 
@@ -16,7 +15,6 @@ export default function TheCutLayout({children}:{children:React.ReactNode}){
       }
     `}</style>
     <RoomHostGate>{children}</RoomHostGate>
-    <HallwayRooms/>
     <CutBannerAds/>
   </div>;
 }
