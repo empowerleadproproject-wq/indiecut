@@ -5,6 +5,7 @@ import { createClient } from '../../lib/supabase/server';
 import { isAdminEmail } from '../../lib/admin';
 
 const modules=[
+ {slug:'distribution',label:'Film Distribution',description:'Manage the public distribution page, review filmmaker submissions, rights information, screeners, statuses and internal notes.'},
  {slug:'homepage',label:'Homepage',description:'Control the Indie Cut homepage, featured stories, hero media and section visibility.'},
  {slug:'streaming',label:'Streaming / Shows & Episodes',description:'Upload and manage Indie Cut shows, episodes, trailers and hosted video content for Indie Cut Watch.'},
  {slug:'advertising',label:'Advertising / Commercials',description:'Upload commercials, run streaming ad breaks, set campaign dates, targeting and destination links.'},
