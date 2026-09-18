@@ -8,6 +8,7 @@ export default function RadioLiveStudio(){
  const load=()=>fetch('/api/admin/radio-live',{cache:'no-store'}).then(r=>r.json()).then(j=>setSessions(j.sessions||[]));
  useEffect(()=>{load();fetch('/api/admin/radio',{cache:'no-store'}).then(r=>r.json()).then(j=>setWorkerUrl(j.worker_url||'')).catch(()=>{});const i=setInterval(load,4000);return()=>{clearInterval(i);live.current?.stop()}},[]);
  async function act(action:string,extra:any={}){setMsg('Working…');const r=await fetch('/api/admin/radio-live',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,...extra})});const j=await r.json();setMsg(r.ok?(action==='end'?'Live ended. Music automation resumed.':'Saved.'):j.error||'Failed');if(r.ok)load();return {ok:r.ok,...j}}
+ async function testTone(){setMsg('Starting 5-second audio test…');const r=await fetch('/api/admin/radio/test',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({seconds:5})});const j=await r.json().catch(()=>({}));setMsg(r.ok?'Test tone is live for 5 seconds. Press Play on the station monitor to hear it.':j.error||'Audio test failed.')}
  async function start(session:any){
    let stream:MediaStream|null=null;
    try{
@@ -29,13 +30,13 @@ export default function RadioLiveStudio(){
   <div className="kicker">LIVE STUDIO</div><h2>Interviews & Live Shows</h2>
   <p>Create a private guest link, admit guests, and broadcast the host and admitted guest microphones through the live radio relay. Headphones are recommended to prevent speaker echo.</p>
   {msg&&<div className="ic-message">{msg}</div>}
-  {streamUrl&&<div style={{margin:'14px 0',padding:12,border:'1px solid #ddd'}}><b>Live return / station test</b><br/><audio controls preload="none" src={streamUrl} style={{width:'100%',marginTop:8}}/></div>}
+  {streamUrl&&<div style={{margin:'14px 0',padding:12,border:'1px solid #ddd'}}><b>Station monitor</b><p style={{margin:'5px 0 8px'}}>Press Play, then run the test tone or start a live session.</p><audio controls preload="none" src={streamUrl} style={{width:'100%',marginBottom:8}}/><button onClick={testTone}>RUN 5-SECOND AUDIO TEST</button></div>}
   {!active?
    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:10}}>
     <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Interview / show title"/>
     <input value={host} onChange={e=>setHost(e.target.value)} placeholder="Host name"/>
     <input value={guest} onChange={e=>setGuest(e.target.value)} placeholder="Expected guest"/>
-    <button onClick={()=>act('create',{title,host_name:host,guest_name:guest,record_enabled:true})}>CREATE LIVE STUDIO</button>
+    <button onClick={()=>act('create',{title,host_name:host,guest_name:guest,record_enabled:false})}>CREATE LIVE STUDIO</button>
    </div>:
    <div style={{border:'1px solid #ddd',padding:18}}>
     <h3>{active.title}</h3><div><b>Status:</b> {active.status.toUpperCase()}</div>
