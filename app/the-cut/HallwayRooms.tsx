@@ -39,7 +39,6 @@ function formatSchedule(value:string|null|undefined){
 }
 
 export default function HallwayRooms(){
-  const[mount,setMount]=useState<HTMLElement|null>(null);
   const[tab,setTab]=useState<Tab>('hallway');
   const[rooms,setRooms]=useState<Room[]>([]);
   const[loading,setLoading]=useState(true);
@@ -59,28 +58,7 @@ export default function HallwayRooms(){
   const[notice,setNotice]=useState('');
   const[refreshKey,setRefreshKey]=useState(0);
 
-  useEffect(()=>{
-    if(new URLSearchParams(location.search).get('room'))return;
-    const original=document.getElementById('cut-room-feed') as HTMLElement|null;
-    if(original)original.style.display='none';
-    setMount(document.body);
-    return()=>{if(original)original.style.display=''};
-  },[]);
-
-  useEffect(()=>{
-    const tabs=Array.from(document.querySelectorAll('#cut-hall-tabs > *')) as HTMLElement[];
-    const activeIndex=tab==='hallway'?0:tab==='upcoming'?1:2;
-    tabs.slice(0,3).forEach((el,i)=>{
-      el.style.color=i===activeIndex?'#fff':'#777';
-      el.style.opacity=i===activeIndex?'1':'.8';
-      el.style.borderBottom=i===activeIndex?'2px solid #785cff':'2px solid transparent';
-      el.style.paddingBottom='9px';
-      el.style.fontWeight=i===activeIndex?'900':'700';
-    });
-  },[tab,mount]);
-
   async function refresh(){
-    if(!mount)return;
     setLoading(true);
     try{
       const supabase=createClient();
@@ -98,12 +76,11 @@ export default function HallwayRooms(){
   }
 
   useEffect(()=>{
-    if(!mount)return;
     refresh();
     const interval=tab==='hallway'?5000:15000;
     const timer=window.setInterval(refresh,interval);
     return()=>window.clearInterval(timer);
-  },[mount,tab,refreshKey]);
+  },[tab,refreshKey]);
 
   useEffect(()=>{
     if(!notice)return;
@@ -197,9 +174,10 @@ export default function HallwayRooms(){
     return d.toISOString().slice(0,16);
   },[]);
 
-  if(!mount)return null;
-
   return <section style={{maxWidth:860,margin:'0 auto',padding:'0 0 110px',color:'#fff'}}>
+    <nav aria-label="The Cut rooms" style={{display:'flex',justifyContent:'center',gap:34,margin:'18px 0 22px'}}>
+      {([['hallway','HALLWAY'],['upcoming','UPCOMING'],['mine','MY ROOMS']] as const).map(([key,label])=><button key={key} type="button" onClick={()=>setTab(key)} aria-pressed={tab===key} style={{border:0,borderBottom:tab===key?'2px solid #785cff':'2px solid transparent',background:tab===key?'#20232a':'transparent',borderRadius:tab===key?999:0,color:tab===key?'#fff':'#777',padding:tab===key?'9px 18px':'9px 4px',fontSize:12,fontWeight:900,cursor:'pointer'}}>{label}</button>)}
+    </nav>
     {notice&&<div style={{background:'#17231c',border:'1px solid #285d3a',borderRadius:14,padding:'12px 15px',margin:'0 0 16px',color:'#baf4ca',fontWeight:800,fontSize:13}}>{notice}</div>}
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:14,margin:'2px 0 18px',flexWrap:'wrap'}}>
       <div><h2 style={{fontSize:22,margin:0}}>{heading}</h2><p style={{color:'#888',fontSize:13,margin:'4px 0 0'}}>{subheading}</p></div>
