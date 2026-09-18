@@ -5,6 +5,7 @@ import {createClient} from '../../lib/supabase/browser';
 
 type Tab='hallway'|'upcoming'|'mine';
 type CreateMode='live'|'schedule'|'premium';
+type StripeStatus={hasAccount:boolean;connected:boolean;chargesEnabled:boolean;payoutsEnabled:boolean;detailsSubmitted:boolean};
 type Room={
   id:string;
   slug:string;
@@ -57,6 +58,8 @@ export default function HallwayRooms(){
   const[error,setError]=useState('');
   const[notice,setNotice]=useState('');
   const[refreshKey,setRefreshKey]=useState(0);
+  const[stripeStatus,setStripeStatus]=useState<StripeStatus|null>(null);
+  const[stripeChecking,setStripeChecking]=useState(false);
 
   async function refresh(){
     setLoading(true);
@@ -88,6 +91,31 @@ export default function HallwayRooms(){
     return()=>window.clearTimeout(timer);
   },[notice]);
 
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    if(params.get('premium')!=='1'&&!params.has('stripe'))return;
+    try{
+      const saved=JSON.parse(sessionStorage.getItem('indiecut_premium_room_draft')||'null');
+      if(saved){
+        setTitle(String(saved.title||''));setScheduledFor(String(saved.scheduledFor||''));
+        setPremiumMode(saved.premiumMode||'entry_fee');setEntryPrice(String(saved.entryPrice||'10'));
+        setProductKind(saved.productKind||'ebook');setProductName(String(saved.productName||''));
+        setProductFileUrl(String(saved.productFileUrl||''));setProductPrice(String(saved.productPrice||''));
+        setRecurrence(saved.recurrence||'once');
+        sessionStorage.removeItem('indiecut_premium_room_draft');
+      }
+    }catch{}
+    setMode('premium');setOpen(true);
+    loadStripeStatus().then(status=>{
+      if(params.get('stripe')==='connected')setNotice(status.connected?'Stripe connected. Premium Rooms can now accept payments.':'Stripe setup was saved. Finish the remaining Stripe requirements before accepting payments.');
+    });
+    params.delete('stripe');params.delete('premium');
+    const query=params.toString();
+    window.history.replaceState(null,'',window.location.pathname+(query?'?'+query:'')+window.location.hash);
+  },[]);
+
+  useEffect(()=>{if(open&&mode==='premium')loadStripeStatus()},[open,mode]);
+
   function resetCreate(){
     setTitle('');
     setMode('live');
@@ -97,7 +125,41 @@ export default function HallwayRooms(){
     setError('');
   }
 
-  async function connectStripe(){setError('');try{const r=await fetch('/api/the-cut/connect',{method:'POST'});const j=await r.json();if(!r.ok)throw new Error(j.error||'Stripe connection could not start');location.href=j.url}catch(e:any){setError(e.message||'Stripe connection could not start')}}
+  async function loadStripeStatus(){
+    setStripeChecking(true);
+    try{
+      const r=await fetch('/api/the-cut/connect',{cache:'no-store'});
+      const j=await r.json();
+      if(!r.ok)throw new Error(j.error||'Stripe status could not be checked');
+      const status:StripeStatus={
+        hasAccount:!!j.hasAccount,
+        connected:!!j.connected,
+        chargesEnabled:!!j.chargesEnabled,
+        payoutsEnabled:!!j.payoutsEnabled,
+        detailsSubmitted:!!j.detailsSubmitted
+      };
+      setStripeStatus(status);
+      return status;
+    }catch(e:any){
+      setError(e.message||'Stripe status could not be checked');
+      const status={hasAccount:false,connected:false,chargesEnabled:false,payoutsEnabled:false,detailsSubmitted:false};
+      setStripeStatus(status);
+      return status;
+    }finally{setStripeChecking(false)}
+  }
+
+  async function connectStripe(){
+    setError('');setStripeChecking(true);
+    try{
+      sessionStorage.setItem('indiecut_premium_room_draft',JSON.stringify({title,scheduledFor,premiumMode,entryPrice,productKind,productName,productFileUrl,productPrice,recurrence}));
+      const r=await fetch('/api/the-cut/connect',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:stripeStatus?.connected?'dashboard':'onboard'})});
+      const j=await r.json();
+      if(!r.ok)throw new Error(j.error||'Stripe connection could not start');
+      setStripeStatus({hasAccount:!!j.hasAccount,connected:!!j.connected,chargesEnabled:!!j.chargesEnabled,payoutsEnabled:!!j.payoutsEnabled,detailsSubmitted:!!j.detailsSubmitted});
+      if(j.url){location.href=j.url;return}
+      setNotice(j.connected?'Stripe is connected and ready for Premium Rooms.':'Finish the remaining Stripe setup before creating a Premium Room.');
+    }catch(e:any){setError(e.message||'Stripe connection could not start');setStripeChecking(false)}
+  }
 
   async function createRoom(e:FormEvent){
     e.preventDefault();
@@ -123,6 +185,8 @@ export default function HallwayRooms(){
       }
 
       if(mode==='premium'){
+        const stripe=await loadStripeStatus();
+        if(!stripe.connected)throw new Error('Connect Stripe and finish payout setup before creating a Premium Room.');
         const when=new Date(scheduledFor);
         if(!Number.isFinite(when.getTime())||when.getTime()<=Date.now())throw new Error('Choose a future date and time.');
         const{data,error:e}=await supabase.rpc('cut_create_premium_room',{p_client_id:getClientId(),p_title:title.trim(),p_scheduled_for:when.toISOString(),p_recurrence_rule:recurrence==='once'?null:recurrence,p_admission_mode:premiumMode,p_admission_price_cents:premiumMode==='purchase_required'?0:Math.round(Number(entryPrice)*100),p_product_kind:premiumMode==='entry_fee'?null:productKind,p_product_name:premiumMode==='entry_fee'?null:productName.trim(),p_product_price_cents:premiumMode==='entry_fee'?0:Math.round(Number(productPrice)*100),p_product_file_url:productKind==='ebook'?productFileUrl.trim()||null:null});
@@ -213,7 +277,7 @@ export default function HallwayRooms(){
           <input type="datetime-local" min={minDateTime} value={scheduledFor} onChange={e=>setScheduledFor(e.target.value)} style={{display:'block',width:'100%',boxSizing:'border-box',marginTop:8,border:'1px solid #343b47',borderRadius:12,background:'#090c11',color:'#fff',padding:'14px 15px',fontSize:16,colorScheme:'dark'}}/>
         </label>}
 
-        {mode==='premium'&&<div style={{display:'grid',gap:12,marginTop:16,padding:16,border:'1px solid #343b47',borderRadius:14,background:'#090c11'}}><strong>Premium access</strong><button type="button" onClick={connectStripe} style={{border:'1px solid #6355b7',borderRadius:999,background:'#17152a',color:'#fff',padding:11,fontWeight:900,cursor:'pointer'}}>Connect / Finish Stripe Setup</button><small style={{color:'#9da4af'}}>Required before anyone can purchase. Stripe processing fees are charged to the host’s connected account; Indie Cut keeps the admin-set platform percentage.</small><label>Room schedule<select value={recurrence} onChange={e=>setRecurrence(e.target.value as any)} style={field}><option value="once">One-time room</option><option value="weekly">Recurring weekly</option><option value="monthly">Recurring monthly</option></select></label><label>How people get access<select value={premiumMode} onChange={e=>setPremiumMode(e.target.value as any)} style={field}><option value="entry_fee">Pay an entry fee</option><option value="purchase_required">Product purchase is the entry</option><option value="both">Offer entry fee OR product purchase</option></select></label>{premiumMode!=='purchase_required'&&<label>Entry price ($)<input type="number" min=".50" step=".01" value={entryPrice} onChange={e=>setEntryPrice(e.target.value)} style={field}/></label>}{premiumMode!=='entry_fee'&&<><label>Product type<select value={productKind} onChange={e=>setProductKind(e.target.value as any)} style={field}><option value="ebook">E-book / digital product</option><option value="physical">Physical book / product</option></select></label><label>Product name<input value={productName} onChange={e=>setProductName(e.target.value)} style={field}/></label><label>Product price ($)<input type="number" min=".50" step=".01" value={productPrice} onChange={e=>setProductPrice(e.target.value)} style={field}/></label>{productKind==='ebook'&&<label>E-book delivery URL<input type="url" value={productFileUrl} onChange={e=>setProductFileUrl(e.target.value)} placeholder="https://…" style={field}/><small style={{color:'#9da4af'}}>Only purchasers are given the gated delivery link.</small></label>}{productKind==='physical'&&<small style={{color:'#9da4af'}}>Checkout will collect the buyer’s shipping address. The host is responsible for fulfillment and tracking.</small>}</>}</div>}
+        {mode==='premium'&&<div style={{display:'grid',gap:12,marginTop:16,padding:16,border:'1px solid #343b47',borderRadius:14,background:'#090c11'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}><strong>Premium access</strong><span style={{fontSize:12,fontWeight:900,color:stripeStatus?.connected?'#7cf2a0':stripeStatus?.hasAccount?'#ffd479':'#9da4af'}}>{stripeChecking?'CHECKING STRIPE…':stripeStatus?.connected?'● STRIPE CONNECTED':stripeStatus?.hasAccount?'● FINISH STRIPE SETUP':'○ STRIPE NOT CONNECTED'}</span></div><button type="button" disabled={stripeChecking} onClick={connectStripe} style={{border:'1px solid #6355b7',borderRadius:999,background:stripeStatus?.connected?'#173320':'#17152a',color:'#fff',padding:11,fontWeight:900,cursor:'pointer',opacity:stripeChecking?.65:1}}>{stripeChecking?'Checking Stripe…':stripeStatus?.connected?'Open Stripe Payout Dashboard':'Connect / Finish Stripe Setup'}</button><small style={{color:'#9da4af'}}>Stripe securely handles identity, bank and payout setup. Premium Rooms stay locked until charges and payouts are enabled. Stripe processing fees are charged to the host’s connected account; Indie Cut keeps the admin-set platform percentage.</small><label>Room schedule<select value={recurrence} onChange={e=>setRecurrence(e.target.value as any)} style={field}><option value="once">One-time room</option><option value="weekly">Recurring weekly</option><option value="monthly">Recurring monthly</option></select></label><label>How people get access<select value={premiumMode} onChange={e=>setPremiumMode(e.target.value as any)} style={field}><option value="entry_fee">Pay an entry fee</option><option value="purchase_required">Product purchase is the entry</option><option value="both">Offer entry fee OR product purchase</option></select></label>{premiumMode!=='purchase_required'&&<label>Entry price ($)<input type="number" min=".50" step=".01" value={entryPrice} onChange={e=>setEntryPrice(e.target.value)} style={field}/></label>}{premiumMode!=='entry_fee'&&<><label>Product type<select value={productKind} onChange={e=>setProductKind(e.target.value as any)} style={field}><option value="ebook">E-book / digital product</option><option value="physical">Physical book / product</option></select></label><label>Product name<input value={productName} onChange={e=>setProductName(e.target.value)} style={field}/></label><label>Product price ($)<input type="number" min=".50" step=".01" value={productPrice} onChange={e=>setProductPrice(e.target.value)} style={field}/></label>{productKind==='ebook'&&<label>E-book delivery URL<input type="url" value={productFileUrl} onChange={e=>setProductFileUrl(e.target.value)} placeholder="https://…" style={field}/><small style={{color:'#9da4af'}}>Only purchasers are given the gated delivery link.</small></label>}{productKind==='physical'&&<small style={{color:'#9da4af'}}>Checkout will collect the buyer’s shipping address. The host is responsible for fulfillment and tracking.</small>}</>}</div>}
 
         {error&&<p style={{color:'#ff6b88',fontWeight:800,fontSize:13,lineHeight:1.4}}>{error}</p>}
         <button disabled={creating} style={{width:'100%',border:0,borderRadius:999,background:'#785cff',color:'#fff',padding:14,fontWeight:900,fontSize:15,marginTop:18,cursor:'pointer',opacity:creating?.65:1}}>{creating?(mode==='live'?'Opening room…':mode==='premium'?'Creating premium room…':'Scheduling…'):(mode==='live'?'Go Live':mode==='premium'?'Create Premium Room':'Schedule Room')}</button>
