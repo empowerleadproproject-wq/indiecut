@@ -52,6 +52,7 @@ export default function HallwayRooms(){
   const[entryPrice,setEntryPrice]=useState('10');
   const[productKind,setProductKind]=useState<'ebook'|'physical'>('ebook');
   const[productName,setProductName]=useState('');
+  const[productFileUrl,setProductFileUrl]=useState('');
   const[productPrice,setProductPrice]=useState('');
   const[recurrence,setRecurrence]=useState<'once'|'weekly'|'monthly'>('once');
   const[creating,setCreating]=useState(false);
@@ -135,7 +136,7 @@ export default function HallwayRooms(){
     setTitle('');
     setMode('live');
     setScheduledFor('');
-    setPremiumMode('entry_fee');setEntryPrice('10');setProductKind('ebook');setProductName('');setProductPrice('');setRecurrence('once');
+    setPremiumMode('entry_fee');setEntryPrice('10');setProductKind('ebook');setProductName('');setProductFileUrl('');setProductPrice('');setRecurrence('once');
     setCreating(false);
     setError('');
   }
@@ -149,6 +150,7 @@ export default function HallwayRooms(){
     if((mode==='schedule'||mode==='premium')&&!scheduledFor){setError('Choose a future date and time.');return}
     if(mode==='premium'&&premiumMode==='entry_fee'&&Number(entryPrice)<=0){setError('Set an entry price.');return}
     if(mode==='premium'&&premiumMode!=='entry_fee'&&(!productName.trim()||Number(productPrice)<=0)){setError('Add the product name and price.');return}
+    if(mode==='premium'&&premiumMode!=='entry_fee'&&productKind==='ebook'&&!productFileUrl.trim()){setError('Add the secure e-book delivery URL.');return}
 
     setCreating(true);
     try{
@@ -167,7 +169,7 @@ export default function HallwayRooms(){
       if(mode==='premium'){
         const when=new Date(scheduledFor);
         if(!Number.isFinite(when.getTime())||when.getTime()<=Date.now())throw new Error('Choose a future date and time.');
-        const{data,error:e}=await supabase.rpc('cut_create_premium_room',{p_client_id:getClientId(),p_title:title.trim(),p_scheduled_for:when.toISOString(),p_recurrence_rule:recurrence==='once'?null:recurrence,p_admission_mode:premiumMode,p_admission_price_cents:premiumMode==='purchase_required'?0:Math.round(Number(entryPrice)*100),p_product_kind:premiumMode==='entry_fee'?null:productKind,p_product_name:premiumMode==='entry_fee'?null:productName.trim(),p_product_price_cents:premiumMode==='entry_fee'?0:Math.round(Number(productPrice)*100),p_product_file_url:null});
+        const{data,error:e}=await supabase.rpc('cut_create_premium_room',{p_client_id:getClientId(),p_title:title.trim(),p_scheduled_for:when.toISOString(),p_recurrence_rule:recurrence==='once'?null:recurrence,p_admission_mode:premiumMode,p_admission_price_cents:premiumMode==='purchase_required'?0:Math.round(Number(entryPrice)*100),p_product_kind:premiumMode==='entry_fee'?null:productKind,p_product_name:premiumMode==='entry_fee'?null:productName.trim(),p_product_price_cents:premiumMode==='entry_fee'?0:Math.round(Number(productPrice)*100),p_product_file_url:productKind==='ebook'?productFileUrl.trim()||null:null});
         if(e)throw e;if(!data?.slug)throw new Error('Premium room could not be created.');
         setOpen(false);resetCreate();setTab('upcoming');setNotice('Premium room created. Connect Stripe before accepting paid admissions.');setRefreshKey(v=>v+1);return;
       }
@@ -222,7 +224,7 @@ export default function HallwayRooms(){
     {notice&&<div style={{background:'#17231c',border:'1px solid #285d3a',borderRadius:14,padding:'12px 15px',margin:'0 0 16px',color:'#baf4ca',fontWeight:800,fontSize:13}}>{notice}</div>}
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:14,margin:'2px 0 18px',flexWrap:'wrap'}}>
       <div><h2 style={{fontSize:22,margin:0}}>{heading}</h2><p style={{color:'#888',fontSize:13,margin:'4px 0 0'}}>{subheading}</p></div>
-      <button onClick={()=>{resetCreate();setOpen(true)}} style={{border:0,borderRadius:999,background:'#fff',color:'#111',padding:'12px 18px',fontWeight:900,cursor:'pointer'}}>＋ Create a Room</button>
+      <a href="/the-cut/orders" style={{border:'1px solid #333',borderRadius:999,color:'#fff',padding:'11px 16px',fontWeight:900,textDecoration:'none'}}>Premium Orders</a><button onClick={()=>{resetCreate();setOpen(true)}} style={{border:0,borderRadius:999,background:'#fff',color:'#111',padding:'12px 18px',fontWeight:900,cursor:'pointer'}}>＋ Create a Room</button>
     </div>
 
     {error&&!open&&<div style={{background:'#281317',border:'1px solid #63303a',borderRadius:14,padding:'12px 15px',marginBottom:14,color:'#ff9caf',fontWeight:800,fontSize:13}}>{error}</div>}
@@ -254,7 +256,7 @@ export default function HallwayRooms(){
           <input type="datetime-local" min={minDateTime} value={scheduledFor} onChange={e=>setScheduledFor(e.target.value)} style={{display:'block',width:'100%',boxSizing:'border-box',marginTop:8,border:'1px solid #343b47',borderRadius:12,background:'#090c11',color:'#fff',padding:'14px 15px',fontSize:16,colorScheme:'dark'}}/>
         </label>}
 
-        {mode==='premium'&&<div style={{display:'grid',gap:12,marginTop:16,padding:16,border:'1px solid #343b47',borderRadius:14,background:'#090c11'}}><strong>Premium access</strong><button type="button" onClick={connectStripe} style={{border:'1px solid #6355b7',borderRadius:999,background:'#17152a',color:'#fff',padding:11,fontWeight:900,cursor:'pointer'}}>Connect / Finish Stripe Setup</button><small style={{color:'#9da4af'}}>Required before anyone can purchase. Stripe processing fees are charged to the host’s connected account; Indie Cut keeps the admin-set platform percentage.</small><label>Room schedule<select value={recurrence} onChange={e=>setRecurrence(e.target.value as any)} style={field}><option value="once">One-time room</option><option value="weekly">Recurring weekly</option><option value="monthly">Recurring monthly</option></select></label><label>How people get access<select value={premiumMode} onChange={e=>setPremiumMode(e.target.value as any)} style={field}><option value="entry_fee">Pay an entry fee</option><option value="purchase_required">Product purchase is the entry</option><option value="both">Offer entry fee OR product purchase</option></select></label>{premiumMode!=='purchase_required'&&<label>Entry price ($)<input type="number" min=".50" step=".01" value={entryPrice} onChange={e=>setEntryPrice(e.target.value)} style={field}/></label>}{premiumMode!=='entry_fee'&&<><label>Product type<select value={productKind} onChange={e=>setProductKind(e.target.value as any)} style={field}><option value="ebook">E-book / digital product</option><option value="physical">Physical book / product</option></select></label><label>Product name<input value={productName} onChange={e=>setProductName(e.target.value)} style={field}/></label><label>Product price ($)<input type="number" min=".50" step=".01" value={productPrice} onChange={e=>setProductPrice(e.target.value)} style={field}/></label>{productKind==='physical'&&<small style={{color:'#9da4af'}}>Checkout will collect the buyer’s shipping address. The host is responsible for fulfillment and tracking.</small>}</>}</div>}
+        {mode==='premium'&&<div style={{display:'grid',gap:12,marginTop:16,padding:16,border:'1px solid #343b47',borderRadius:14,background:'#090c11'}}><strong>Premium access</strong><button type="button" onClick={connectStripe} style={{border:'1px solid #6355b7',borderRadius:999,background:'#17152a',color:'#fff',padding:11,fontWeight:900,cursor:'pointer'}}>Connect / Finish Stripe Setup</button><small style={{color:'#9da4af'}}>Required before anyone can purchase. Stripe processing fees are charged to the host’s connected account; Indie Cut keeps the admin-set platform percentage.</small><label>Room schedule<select value={recurrence} onChange={e=>setRecurrence(e.target.value as any)} style={field}><option value="once">One-time room</option><option value="weekly">Recurring weekly</option><option value="monthly">Recurring monthly</option></select></label><label>How people get access<select value={premiumMode} onChange={e=>setPremiumMode(e.target.value as any)} style={field}><option value="entry_fee">Pay an entry fee</option><option value="purchase_required">Product purchase is the entry</option><option value="both">Offer entry fee OR product purchase</option></select></label>{premiumMode!=='purchase_required'&&<label>Entry price ($)<input type="number" min=".50" step=".01" value={entryPrice} onChange={e=>setEntryPrice(e.target.value)} style={field}/></label>}{premiumMode!=='entry_fee'&&<><label>Product type<select value={productKind} onChange={e=>setProductKind(e.target.value as any)} style={field}><option value="ebook">E-book / digital product</option><option value="physical">Physical book / product</option></select></label><label>Product name<input value={productName} onChange={e=>setProductName(e.target.value)} style={field}/></label><label>Product price ($)<input type="number" min=".50" step=".01" value={productPrice} onChange={e=>setProductPrice(e.target.value)} style={field}/></label>{productKind==='ebook'&&<label>E-book delivery URL<input type="url" value={productFileUrl} onChange={e=>setProductFileUrl(e.target.value)} placeholder="https://…" style={field}/><small style={{color:'#9da4af'}}>Only purchasers are given the gated delivery link.</small></label>}{productKind==='physical'&&<small style={{color:'#9da4af'}}>Checkout will collect the buyer’s shipping address. The host is responsible for fulfillment and tracking.</small>}</>}</div>}
 
         {error&&<p style={{color:'#ff6b88',fontWeight:800,fontSize:13,lineHeight:1.4}}>{error}</p>}
         <button disabled={creating} style={{width:'100%',border:0,borderRadius:999,background:'#785cff',color:'#fff',padding:14,fontWeight:900,fontSize:15,marginTop:18,cursor:'pointer',opacity:creating?.65:1}}>{creating?(mode==='live'?'Opening room…':mode==='premium'?'Creating premium room…':'Scheduling…'):(mode==='live'?'Go Live':mode==='premium'?'Create Premium Room':'Schedule Room')}</button>
