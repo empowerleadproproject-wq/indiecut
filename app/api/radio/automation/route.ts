@@ -60,12 +60,22 @@ export async function GET(req:Request){
     }
     return songs;
   };
-  async function pickKind(kind:'station_id'|'commercial'){
+  async function pickKind(kind:'station_id'|'commercial', imagingType?:string){
     const {data}=await x.from('radio_media').select('*').eq('active',true).eq('kind',kind);
-    if(!data?.length)return null;
-    return data[Math.floor(Math.random()*data.length)];
+    const filtered=imagingType?(data||[]).filter((z:any)=>z.imaging_type===imagingType):(data||[]);
+    if(!filtered.length)return null;
+    return filtered[Math.floor(Math.random()*filtered.length)];
   }
 
+  const {data:imagingRules}=await x.from('radio_imaging_rules').select('*').eq('active',true).order('created_at');
+  for(const rule of imagingRules||[]){
+    const last=h.find((q:any)=>q.radio_media?.kind==='station_id'&&String(q.source||'').startsWith('imaging:'+rule.id));
+    const gapOk=!last||now.getTime()-new Date(last.played_at).getTime()>=Number(rule.min_gap_minutes||0)*60000;
+    if(gapOk&&songsSince('station_id')>=Number(rule.every_songs||3)){
+      const item=await pickKind('station_id',rule.imaging_type);
+      if(item)return noStore({source:'imaging:'+rule.id,source_type:'station_id',rotation:r.name,item});
+    }
+  }
   if(Number(r.station_id_every_songs)>0&&songsSince('station_id')>=Number(r.station_id_every_songs)){
     const item=await pickKind('station_id');
     if(item)return noStore({source:'station_id',source_type:'station_id',rotation:r.name,item});
@@ -75,7 +85,7 @@ export async function GET(req:Request){
     if(item)return noStore({source:'commercial',source_type:'commercial',rotation:r.name,item});
   }
 
-  const items=r.radio_rotation_items.map((z:any)=>z.radio_media).filter((m:any)=>m?.active&&m.kind==='music');
+  const items=r.radio_rotation_items.map((z:any)=>z.radio_media).filter((m:any)=>m?.active&&m.kind==='music'&&m.rights_status==='verified');
   const nowMs=now.getTime();
   const eligible=items.filter((m:any)=>
     !h.some((q:any)=>q.media_id===m.id&&nowMs-new Date(q.played_at).getTime()<Number(r.song_separation_minutes||0)*60000)
