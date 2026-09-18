@@ -61,8 +61,8 @@ export default function HallwayRooms(){
   const[stripeStatus,setStripeStatus]=useState<StripeStatus|null>(null);
   const[stripeChecking,setStripeChecking]=useState(false);
 
-  async function refresh(){
-    setLoading(true);
+  async function refresh(showLoading=false){
+    if(showLoading)setLoading(true);
     try{
       const supabase=createClient();
       const fn=tab==='hallway'?'cut_hallway_rooms':tab==='upcoming'?'cut_upcoming_rooms':'cut_my_rooms';
@@ -79,7 +79,7 @@ export default function HallwayRooms(){
   }
 
   useEffect(()=>{
-    refresh();
+    refresh(true);
     const interval=tab==='hallway'?5000:15000;
     const timer=window.setInterval(refresh,interval);
     return()=>window.clearInterval(timer);
