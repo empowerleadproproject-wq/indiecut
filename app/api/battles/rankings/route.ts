@@ -6,6 +6,7 @@ export const revalidate=0;
 
 const ACTIVE_STATUSES=new Set(['draft','qualifying','scheduled','live']);
 const STATUS_WEIGHT:Record<string,number>={live:4,qualifying:3,scheduled:2,draft:1};
+function genreKey(value:any){return String(value||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-')}
 
 export async function GET(){
   try{
@@ -32,7 +33,7 @@ export async function GET(){
     const genreBoards:any[]=[];
     for(const contest of current){
       const genre=String(contest.genre||'').trim();
-      const key=genre.toLowerCase();
+      const key=genreKey(genre);
       if(!genre||seen.has(key))continue;
       const contestEntries=(entries||[]).filter((e:any)=>e.contest_id===contest.id);
       if(!contestEntries.length)continue;
