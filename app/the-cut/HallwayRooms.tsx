@@ -93,7 +93,8 @@ export default function HallwayRooms(){
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
-    if(params.get('premium')!=='1'&&!params.has('stripe'))return;
+    const stripeReturn=params.get('stripe');
+    if(params.get('premium')!=='1'&&!stripeReturn)return;
     try{
       const saved=JSON.parse(sessionStorage.getItem('indiecut_premium_room_draft')||'null');
       if(saved){
@@ -107,7 +108,7 @@ export default function HallwayRooms(){
     }catch{}
     setMode('premium');setOpen(true);
     loadStripeStatus().then(status=>{
-      if(params.get('stripe')==='connected')setNotice(status.connected?'Stripe connected. Premium Rooms can now accept payments.':'Stripe setup was saved. Finish the remaining Stripe requirements before accepting payments.');
+      if(stripeReturn==='connected')setNotice(status.connected?'Stripe connected. Premium Rooms can now accept payments.':'Stripe setup was saved. Finish the remaining Stripe requirements before accepting payments.');
     });
     params.delete('stripe');params.delete('premium');
     const query=params.toString();
@@ -166,7 +167,7 @@ export default function HallwayRooms(){
     setError('');
     if(title.trim().length<3){setError('Give your room a name.');return}
     if((mode==='schedule'||mode==='premium')&&!scheduledFor){setError('Choose a future date and time.');return}
-    if(mode==='premium'&&premiumMode==='entry_fee'&&Number(entryPrice)<=0){setError('Set an entry price.');return}
+    if(mode==='premium'&&premiumMode!=='purchase_required'&&Number(entryPrice)<.5){setError('Set an entry price of at least $0.50.');return}
     if(mode==='premium'&&premiumMode!=='entry_fee'&&(!productName.trim()||Number(productPrice)<=0)){setError('Add the product name and price.');return}
     if(mode==='premium'&&premiumMode!=='entry_fee'&&productKind==='ebook'&&!productFileUrl.trim()){setError('Add the secure e-book delivery URL.');return}
 
@@ -191,7 +192,7 @@ export default function HallwayRooms(){
         if(!Number.isFinite(when.getTime())||when.getTime()<=Date.now())throw new Error('Choose a future date and time.');
         const{data,error:e}=await supabase.rpc('cut_create_premium_room',{p_client_id:getClientId(),p_title:title.trim(),p_scheduled_for:when.toISOString(),p_recurrence_rule:recurrence==='once'?null:recurrence,p_admission_mode:premiumMode,p_admission_price_cents:premiumMode==='purchase_required'?0:Math.round(Number(entryPrice)*100),p_product_kind:premiumMode==='entry_fee'?null:productKind,p_product_name:premiumMode==='entry_fee'?null:productName.trim(),p_product_price_cents:premiumMode==='entry_fee'?0:Math.round(Number(productPrice)*100),p_product_file_url:productKind==='ebook'?productFileUrl.trim()||null:null});
         if(e)throw e;if(!data?.slug)throw new Error('Premium room could not be created.');
-        setOpen(false);resetCreate();setTab('upcoming');setNotice('Premium room created. Connect Stripe before accepting paid admissions.');setRefreshKey(v=>v+1);return;
+        setOpen(false);resetCreate();setTab('upcoming');setNotice('Premium room created. Stripe is connected and paid admissions are ready.');setRefreshKey(v=>v+1);return;
       }
 
       const when=new Date(scheduledFor);
