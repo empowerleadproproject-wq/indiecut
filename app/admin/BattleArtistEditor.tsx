@@ -38,7 +38,7 @@ export default function BattleArtistEditor(){
       artist_name:artist.artist_name||'',city:artist.city||'',bio:artist.bio||'',
       image_url:artist.image_url||'',track_title:artist.track_title||'',track_url:artist.track_url||'',
       track_cover_url:artist.track_cover_url||'',instagram_url:artist.instagram_url||'',tiktok_url:artist.tiktok_url||'',
-      youtube_url:artist.youtube_url||'',facebook_url:artist.facebook_url||'',active:artist.active!==false
+      youtube_url:artist.youtube_url||'',facebook_url:artist.facebook_url||'',genre:artist.contest_genre||artist.genre||'',active:artist.active!==false
     }}));
     setEditing(artist.id);setMessage('');
   }
@@ -64,7 +64,7 @@ export default function BattleArtistEditor(){
 
   return <section className="ic-module-panel" style={{marginBottom:24}}>
     <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'start',flexWrap:'wrap'}}>
-      <div><h2 style={{margin:'0 0 6px'}}>Approved Artist Profiles</h2><p style={{margin:0,maxWidth:820}}>Fully edit the public voting profiles after approval — artist name, location, bio, photo, song title, music file, cover art, Instagram, TikTok, YouTube, Facebook and whether the profile is active. The genre stays locked to the competition so artists cannot cross genres.</p></div>
+      <div><h2 style={{margin:'0 0 6px'}}>Approved Artist Profiles</h2><p style={{margin:0,maxWidth:820}}>Fully edit the public voting profiles after approval — artist name, location, bio, photo, song title, music file, cover art, Instagram, TikTok, YouTube, Facebook and whether the profile is active. Genre can be corrected by an administrator. If changed, the artist is moved to the active competition for that genre so public rankings stay accurate.</p></div>
       <strong>{artists.length} ARTIST{artists.length===1?'':'S'}</strong>
     </div>
     {message&&<div className="ic-message" style={{marginTop:14}}>{message}</div>}
@@ -81,7 +81,7 @@ export default function BattleArtistEditor(){
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:12}}>
               <label>Artist / stage name<input value={d.artist_name||''} onChange={e=>patch(artist.id,'artist_name',e.target.value)}/></label>
               <label>Location / city, state<input value={d.city||''} onChange={e=>patch(artist.id,'city',e.target.value)} placeholder="New Jersey"/></label>
-              <label>Genre<input value={artist.contest_genre||artist.genre||''} readOnly/></label>
+              <label>Genre<select value={d.genre||''} onChange={e=>patch(artist.id,'genre',e.target.value)}><option value="">Choose genre</option>{['Hip-Hop','R&B','Gospel','Southern Soul','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'].map(g=><option key={g} value={g}>{g}</option>)}</select></label>
               <label>Song title<input value={d.track_title||''} onChange={e=>patch(artist.id,'track_title',e.target.value)}/></label>
               <label>Instagram<input value={d.instagram_url||''} onChange={e=>patch(artist.id,'instagram_url',e.target.value)} placeholder="@handle or Instagram URL"/></label>
               <label>TikTok<input value={d.tiktok_url||''} onChange={e=>patch(artist.id,'tiktok_url',e.target.value)} placeholder="@handle or TikTok URL"/></label>
