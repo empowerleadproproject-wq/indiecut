@@ -12,6 +12,8 @@ async function adminDb(){
   if(!url||!key)return {error:NextResponse.json({error:'Supabase service credentials missing'},{status:503})};
   return {db:createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})};
 }
+const GENRES=['Hip-Hop','R&B','Gospel','Southern Soul','Pop','Rock','Country','Afrobeats','Reggae / Dancehall','Latin','Electronic / Dance','Jazz','Soul','Alternative','Blues','Folk'] as const;
+function normalizeGenre(value:any){const raw=String(value||'').trim().toLowerCase();return GENRES.find(g=>g.toLowerCase()===raw)||''}
 type SocialNetwork='instagram'|'tiktok'|'youtube'|'facebook';
 function cleanSocial(value:any,network:SocialNetwork){
   const raw=String(value||'').trim();if(!raw)return null;
@@ -45,9 +47,19 @@ export async function POST(request:Request){
 
   const artistName=String(p.artist_name??existing.artist_name??'').trim();
   if(!artistName)return NextResponse.json({error:'Artist name is required.'},{status:400});
+  const requestedGenre=normalizeGenre(p.genre??existing.genre);
+  if(!requestedGenre)return NextResponse.json({error:'Choose a valid genre.'},{status:400});
+  let targetContestId=existing.contest_id;
+  if(String(requestedGenre).toLowerCase()!==String(existing.genre||'').toLowerCase()){
+    const {data:target}=await db.from('battle_contests').select('id,genre,status,created_at').eq('genre',requestedGenre).in('status',['draft','qualifying','scheduled','live']).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if(!target)return NextResponse.json({error:`There is no active ${requestedGenre} competition yet. Create that competition before moving this artist.`},{status:409});
+    targetContestId=target.id;
+  }
 
   const update:any={
     artist_name:artistName,
+    genre:requestedGenre,
+    contest_id:targetContestId,
     city:String(p.city??existing.city??'').trim()||null,
     bio:String(p.bio??existing.bio??'').trim()||null,
     image_url:String(p.image_url??existing.image_url??'').trim()||null,
