@@ -9,7 +9,11 @@ const BASE_URL=(process.env.INDIECUT_BASE_URL||'https://indiecut.info').replace(
 const WORKER_TOKEN=process.env.RADIO_WORKER_TOKEN||'';
 const FRAME_SAMPLES=960,FRAME_BYTES=FRAME_SAMPLES*2;
 
-const ffmpegProbe=spawnSync('ffmpeg',['-hide_banner','-encoders'],{encoding:'utf8'});\nconst ffmpegReady=ffmpegProbe.status===0&&String(ffmpegProbe.stdout||'').includes('libmp3lame');\nif(!ffmpegReady)console.error('FFmpeg/libmp3lame readiness check failed',String(ffmpegProbe.stderr||'').slice(-1000));\n\nconst app=express(),server=http.createServer(app),wss=new WebSocketServer({server,path:'/live'});
+const ffmpegProbe=spawnSync('ffmpeg',['-hide_banner','-encoders'],{encoding:'utf8'});
+const ffmpegReady=ffmpegProbe.status===0&&String(ffmpegProbe.stdout||'').includes('libmp3lame');
+if(!ffmpegReady)console.error('FFmpeg/libmp3lame readiness check failed',String(ffmpegProbe.stderr||'').slice(-1000));
+
+const app=express(),server=http.createServer(app),wss=new WebSocketServer({server,path:'/live'});
 const listeners=new Set();
 const peers=new Map();
 
