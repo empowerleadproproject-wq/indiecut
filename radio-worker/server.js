@@ -141,6 +141,14 @@ wss.on('connection',async(ws,req)=>{
   }catch(e){try{ws.close(1008,String(e.message||'Unauthorized').slice(0,100))}catch{}}
 });
 
+async function siteHandshake(){
+  try{
+    const r=await fetch(BASE_URL+'/api/radio',{cache:'no-store'});
+    const j=await r.json().catch(()=>({}));
+    console.log('Indie Cut site handshake',JSON.stringify({status:r.status,enabled:Boolean(j.enabled),worker_url:String(j.worker_url||''),stream_url:String(j.stream_url||'')}));
+  }catch(e){console.error('Indie Cut site handshake failed',e.message)}
+}
+
 async function nextItem(){
   if(!WORKER_TOKEN)throw new Error('RADIO_WORKER_TOKEN is missing');
   const r=await fetch(BASE_URL+'/api/radio/automation',{headers:{authorization:'Bearer '+WORKER_TOKEN},cache:'no-store'});
@@ -179,4 +187,4 @@ async function automationLoop(){
   }
 }
 process.on('SIGTERM',()=>{stopping=true;stopProc(testProc);stopProc(automationProc);stopProc(liveEncoder);try{icecastReq?.end()}catch{};server.close(()=>process.exit(0))});
-server.listen(PORT,'0.0.0.0',()=>{console.log('Indie Cut Radio worker listening on',PORT);void automationLoop()});
+server.listen(PORT,'0.0.0.0',()=>{console.log('Indie Cut Radio worker listening on',PORT);void siteHandshake();void automationLoop()});
