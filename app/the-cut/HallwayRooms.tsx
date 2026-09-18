@@ -181,7 +181,7 @@ export default function HallwayRooms(){
     {notice&&<div style={{background:'#17231c',border:'1px solid #285d3a',borderRadius:14,padding:'12px 15px',margin:'0 0 16px',color:'#baf4ca',fontWeight:800,fontSize:13}}>{notice}</div>}
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:14,margin:'2px 0 18px',flexWrap:'wrap'}}>
       <div><h2 style={{fontSize:22,margin:0}}>{heading}</h2><p style={{color:'#888',fontSize:13,margin:'4px 0 0'}}>{subheading}</p></div>
-      <a href="/the-cut/orders" style={{border:'1px solid #333',borderRadius:999,color:'#fff',padding:'11px 16px',fontWeight:900,textDecoration:'none'}}>Premium Orders</a><button onClick={()=>{resetCreate();setOpen(true)}} style={{border:0,borderRadius:999,background:'#fff',color:'#111',padding:'12px 18px',fontWeight:900,cursor:'pointer'}}>＋ Create a Room</button>
+      <button onClick={()=>{resetCreate();setOpen(true)}} style={{border:0,borderRadius:999,background:'#fff',color:'#111',padding:'12px 18px',fontWeight:900,cursor:'pointer'}}>＋ Create a Room</button>
     </div>
 
     {error&&!open&&<div style={{background:'#281317',border:'1px solid #63303a',borderRadius:14,padding:'12px 15px',marginBottom:14,color:'#ff9caf',fontWeight:800,fontSize:13}}>{error}</div>}
