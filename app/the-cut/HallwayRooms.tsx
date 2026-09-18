@@ -5,7 +5,7 @@ import {createPortal} from 'react-dom';
 import {createClient} from '../../lib/supabase/browser';
 
 type Tab='hallway'|'upcoming'|'mine';
-type CreateMode='live'|'schedule';
+type CreateMode='live'|'schedule'|'premium';
 type Room={
   id:string;
   slug:string;
@@ -48,6 +48,12 @@ export default function HallwayRooms(){
   const[title,setTitle]=useState('');
   const[mode,setMode]=useState<CreateMode>('live');
   const[scheduledFor,setScheduledFor]=useState('');
+  const[premiumMode,setPremiumMode]=useState<'entry_fee'|'purchase_required'|'both'>('entry_fee');
+  const[entryPrice,setEntryPrice]=useState('10');
+  const[productKind,setProductKind]=useState<'ebook'|'physical'>('ebook');
+  const[productName,setProductName]=useState('');
+  const[productPrice,setProductPrice]=useState('');
+  const[recurrence,setRecurrence]=useState<'once'|'weekly'|'monthly'>('once');
   const[creating,setCreating]=useState(false);
   const[error,setError]=useState('');
   const[notice,setNotice]=useState('');
@@ -129,6 +135,7 @@ export default function HallwayRooms(){
     setTitle('');
     setMode('live');
     setScheduledFor('');
+    setPremiumMode('entry_fee');setEntryPrice('10');setProductKind('ebook');setProductName('');setProductPrice('');setRecurrence('once');
     setCreating(false);
     setError('');
   }
@@ -137,7 +144,9 @@ export default function HallwayRooms(){
     e.preventDefault();
     setError('');
     if(title.trim().length<3){setError('Give your room a name.');return}
-    if(mode==='schedule'&&!scheduledFor){setError('Choose a future date and time.');return}
+    if((mode==='schedule'||mode==='premium')&&!scheduledFor){setError('Choose a future date and time.');return}
+    if(mode==='premium'&&premiumMode==='entry_fee'&&Number(entryPrice)<=0){setError('Set an entry price.');return}
+    if(mode==='premium'&&premiumMode!=='entry_fee'&&(!productName.trim()||Number(productPrice)<=0)){setError('Add the product name and price.');return}
 
     setCreating(true);
     try{
@@ -151,6 +160,14 @@ export default function HallwayRooms(){
         if(!data?.slug)throw new Error('Room could not be created.');
         location.href=`/the-cut?room=${encodeURIComponent(data.slug)}`;
         return;
+      }
+
+      if(mode==='premium'){
+        const when=new Date(scheduledFor);
+        if(!Number.isFinite(when.getTime())||when.getTime()<=Date.now())throw new Error('Choose a future date and time.');
+        const{data,error:e}=await supabase.rpc('cut_create_premium_room',{p_client_id:getClientId(),p_title:title.trim(),p_scheduled_for:when.toISOString(),p_recurrence_rule:recurrence==='once'?null:recurrence,p_admission_mode:premiumMode,p_admission_price_cents:premiumMode==='purchase_required'?0:Math.round(Number(entryPrice)*100),p_product_kind:premiumMode==='entry_fee'?null:productKind,p_product_name:premiumMode==='entry_fee'?null:productName.trim(),p_product_price_cents:premiumMode==='entry_fee'?0:Math.round(Number(productPrice)*100),p_product_file_url:null});
+        if(e)throw e;if(!data?.slug)throw new Error('Premium room could not be created.');
+        setOpen(false);resetCreate();setTab('upcoming');setNotice('Premium room created. Connect Stripe before accepting paid admissions.');setRefreshKey(v=>v+1);return;
       }
 
       const when=new Date(scheduledFor);
@@ -221,21 +238,24 @@ export default function HallwayRooms(){
         <h2 style={{fontSize:30,margin:'8px 0'}}>Start now or schedule it</h2>
         <p style={{color:'#9da4af',lineHeight:1.5}}>Signed-in Indie Cut members can create a room and automatically become the host.</p>
 
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,background:'#090c11',padding:5,borderRadius:14,margin:'18px 0'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,background:'#090c11',padding:5,borderRadius:14,margin:'18px 0'}}>
           <button type="button" onClick={()=>setMode('live')} style={{border:0,borderRadius:10,padding:'11px 10px',fontWeight:900,cursor:'pointer',background:mode==='live'?'#785cff':'transparent',color:'#fff'}}>Go Live Now</button>
-          <button type="button" onClick={()=>setMode('schedule')} style={{border:0,borderRadius:10,padding:'11px 10px',fontWeight:900,cursor:'pointer',background:mode==='schedule'?'#785cff':'transparent',color:'#fff'}}>Schedule for Later</button>
+          <button type="button" onClick={()=>setMode('schedule')} style={{border:0,borderRadius:10,padding:'11px 10px',fontWeight:900,cursor:'pointer',background:mode==='schedule'?'#785cff':'transparent',color:'#fff'}}>Schedule</button>
+          <button type="button" onClick={()=>setMode('premium')} style={{border:0,borderRadius:10,padding:'11px 10px',fontWeight:900,cursor:'pointer',background:mode==='premium'?'#785cff':'transparent',color:'#fff'}}>Premium</button>
         </div>
 
         <label style={{display:'block',fontWeight:900,fontSize:13,marginTop:16}}>Room name
           <input autoFocus maxLength={90} value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Independent filmmakers: what are you working on?" style={{display:'block',width:'100%',boxSizing:'border-box',marginTop:8,border:'1px solid #343b47',borderRadius:12,background:'#090c11',color:'#fff',padding:'14px 15px',fontSize:16}}/>
         </label>
 
-        {mode==='schedule'&&<label style={{display:'block',fontWeight:900,fontSize:13,marginTop:16}}>Date & time
+        {(mode==='schedule'||mode==='premium')&&<label style={{display:'block',fontWeight:900,fontSize:13,marginTop:16}}>Date & time
           <input type="datetime-local" min={minDateTime} value={scheduledFor} onChange={e=>setScheduledFor(e.target.value)} style={{display:'block',width:'100%',boxSizing:'border-box',marginTop:8,border:'1px solid #343b47',borderRadius:12,background:'#090c11',color:'#fff',padding:'14px 15px',fontSize:16,colorScheme:'dark'}}/>
         </label>}
 
+        {mode==='premium'&&<div style={{display:'grid',gap:12,marginTop:16,padding:16,border:'1px solid #343b47',borderRadius:14,background:'#090c11'}}><strong>Premium access</strong><label>Room schedule<select value={recurrence} onChange={e=>setRecurrence(e.target.value as any)} style={field}><option value="once">One-time room</option><option value="weekly">Recurring weekly</option><option value="monthly">Recurring monthly</option></select></label><label>How people get access<select value={premiumMode} onChange={e=>setPremiumMode(e.target.value as any)} style={field}><option value="entry_fee">Pay an entry fee</option><option value="purchase_required">Product purchase is the entry</option><option value="both">Offer entry fee OR product purchase</option></select></label>{premiumMode!=='purchase_required'&&<label>Entry price ($)<input type="number" min=".50" step=".01" value={entryPrice} onChange={e=>setEntryPrice(e.target.value)} style={field}/></label>}{premiumMode!=='entry_fee'&&<><label>Product type<select value={productKind} onChange={e=>setProductKind(e.target.value as any)} style={field}><option value="ebook">E-book / digital product</option><option value="physical">Physical book / product</option></select></label><label>Product name<input value={productName} onChange={e=>setProductName(e.target.value)} style={field}/></label><label>Product price ($)<input type="number" min=".50" step=".01" value={productPrice} onChange={e=>setProductPrice(e.target.value)} style={field}/></label>{productKind==='physical'&&<small style={{color:'#9da4af'}}>Checkout will collect the buyer’s shipping address. The host is responsible for fulfillment and tracking.</small>}</>}</div>}
+
         {error&&<p style={{color:'#ff6b88',fontWeight:800,fontSize:13,lineHeight:1.4}}>{error}</p>}
-        <button disabled={creating} style={{width:'100%',border:0,borderRadius:999,background:'#785cff',color:'#fff',padding:14,fontWeight:900,fontSize:15,marginTop:18,cursor:'pointer',opacity:creating?.65:1}}>{creating?(mode==='live'?'Opening room…':'Scheduling…'):(mode==='live'?'Go Live':'Schedule Room')}</button>
+        <button disabled={creating} style={{width:'100%',border:0,borderRadius:999,background:'#785cff',color:'#fff',padding:14,fontWeight:900,fontSize:15,marginTop:18,cursor:'pointer',opacity:creating?.65:1}}>{creating?(mode==='live'?'Opening room…':mode==='premium'?'Creating premium room…':'Scheduling…'):(mode==='live'?'Go Live':mode==='premium'?'Create Premium Room':'Schedule Room')}</button>
         <p style={{color:'#777',fontSize:11,textAlign:'center',lineHeight:1.4}}>{mode==='live'?'Your room appears in the Hallway immediately.':'Your room appears under Upcoming and you can start it from My Rooms.'}</p>
       </form>
     </div>}
@@ -270,6 +290,7 @@ function RoomCard({room,tab,startRoom}:{room:Room;tab:Tab;startRoom:()=>void}){
   </article>;
 }
 
+const field:CSSProperties={display:'block',width:'100%',boxSizing:'border-box',marginTop:7,border:'1px solid #343b47',borderRadius:10,background:'#11151b',color:'#fff',padding:'11px 12px'};
 const primaryButton:CSSProperties={border:0,borderRadius:999,background:'#785cff',color:'#fff',padding:'13px 18px',fontWeight:900,cursor:'pointer',whiteSpace:'nowrap'};
 
 function diffTimezoneOffset(){return new Date().getTimezoneOffset()*60_000}
