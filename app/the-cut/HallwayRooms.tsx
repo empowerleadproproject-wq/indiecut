@@ -63,28 +63,25 @@ export default function HallwayRooms(){
   useEffect(()=>{
     if(new URLSearchParams(location.search).get('room'))return;
     const original=document.getElementById('cut-room-feed') as HTMLElement|null;
-    if(!original)return;
-    original.style.display='none';
-    const node=document.createElement('div');
-    node.setAttribute('data-cut-community-rooms','1');
-    original.insertAdjacentElement('afterend',node);
-    setMount(node);
-
     const tabs=Array.from(document.querySelectorAll('#cut-hall-tabs > *')) as HTMLElement[];
     const map:Tab[]=['hallway','upcoming','mine'];
     const handlers=tabs.slice(0,3).map((el,i)=>{
       const fn=(event:Event)=>{event.preventDefault();setTab(map[i]);};
+      const key=(event:KeyboardEvent)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setTab(map[i]);}};
       el.addEventListener('click',fn);
+      el.addEventListener('keydown',key as EventListener);
       el.setAttribute('role','button');
       el.setAttribute('tabindex','0');
       el.style.cursor='pointer';
-      return {el,fn};
+      return {el,fn,key};
     });
-
+    if(original){
+      original.style.display='none';
+      setMount(original);
+    }
     return()=>{
-      original.style.display='';
-      node.remove();
-      handlers.forEach(({el,fn})=>el.removeEventListener('click',fn));
+      if(original)original.style.display='';
+      handlers.forEach(({el,fn,key})=>{el.removeEventListener('click',fn);el.removeEventListener('keydown',key as EventListener)});
     };
   },[]);
 
