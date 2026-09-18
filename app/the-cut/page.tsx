@@ -87,7 +87,7 @@ function normalizeRoom(raw:any):Room|null{
 }
 function formatRemaining(ms:number){const total=Math.max(0,Math.ceil(ms/1000));const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=total%60;return h>0?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`}
 async function loadMe():Promise<Person>{try{const supabase=createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)return fallbackMe;const{data}=await supabase.from('cut_profiles').select('display_name,username,bio,avatar_url,website_url').eq('id',user.id).maybeSingle();const username=data?.username||'';const display=data?.display_name||username||user.email?.split('@')[0]||'You';return{id:user.id,name:display,avatar:data?.avatar_url||initials(display),avatarIsUrl:!!data?.avatar_url,role:'listener',handle:username?`@${username}`:'',followers:'0',following:'0',bio:data?.bio||'',link:data?.website_url||'',own:true}}catch{return fallbackMe}}
-function getClientId(){const key='indiecut_cut_client_id';let id=localStorage.getItem(key);if(!id){id=crypto.randomUUID();localStorage.setItem(key,id)}return id}
+function getClientId(){const key='indiecut_cut_client_id';let id=localStorage.getItem(key);if(!id){id=typeof crypto!=='undefined'&&'randomUUID' in crypto?crypto.randomUUID():`cut-${Date.now()}-${Math.random().toString(36).slice(2)}`;localStorage.setItem(key,id)}return id}
 
 function Avatar({p,host=false,promo}:{p:Person;host?:boolean;promo?:Promo|null}){
   const promoted=!!promo;
@@ -149,14 +149,24 @@ function LiveRoom({slug,back}:{slug:string;back:()=>void}){
 
   async function refreshRoom(){
     if(!clientId.current)return;
+    const supabase=createClient();
     try{
-      const supabase=createClient();
       const{data,error}=await supabase.rpc('cut_room_listen',{p_room_slug:slug,p_client_id:clientId.current});
       if(error)throw error;
       const next=normalizeRoom(data);
       setRoom(next);
       if(next?.people.some(p=>p.own)){setJoined(true);localStorage.setItem(`indiecut_cut_joined_${slug}`,'1')}
-    }catch{setRoom(null)}finally{setLoading(false)}
+    }catch{
+      // A listener heartbeat write should never make a valid live room look unavailable.
+      // Fall back to a read-only snapshot and preserve the last good room on transient failures.
+      try{
+        const{data,error}=await supabase.rpc('cut_room_snapshot_for_client',{p_room_slug:slug,p_client_id:clientId.current});
+        if(error)throw error;
+        const next=normalizeRoom(data);
+        setRoom(previous=>next||previous);
+        if(next?.people.some(p=>p.own)){setJoined(true);localStorage.setItem(`indiecut_cut_joined_${slug}`,'1')}
+      }catch{}
+    }finally{setLoading(false)}
   }
   async function refreshPromo(){
     if(!clientId.current)return;
