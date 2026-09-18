@@ -36,12 +36,18 @@ export default async function Home(){
   client.from('site_settings').select('setting_value').eq('setting_key','admin_advertising').maybeSingle(),
   client.from('site_settings').select('setting_value').eq('setting_key','admin_homepage').maybeSingle()
  ]);
- const stories=storiesData||[];let ads:any[]=[];let home:any={};try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}try{home=JSON.parse(homeRow?.setting_value||'{}')}catch{}
+ const stories=storiesData||[];
+ const spotlightCategories=new Set(['indie-music-spotlight','indie-film-spotlight','indie-creator-spotlight']);
+ // Keep Indie Spotlight in its own editorial lane. Spotlight profiles can appear only
+ // in the dedicated homepage Spotlight module, never as lead/latest/general news.
+ const spotlights=stories.filter((s:any)=>spotlightCategories.has(String(s.category||'').toLowerCase())).slice(0,6);
+ const homepageStories=stories.filter((s:any)=>!spotlightCategories.has(String(s.category||'').toLowerCase()));
+ let ads:any[]=[];let home:any={};try{ads=JSON.parse(adRow?.setting_value||'[]')}catch{}try{home=JSON.parse(homeRow?.setting_value||'{}')}catch{}
  const geo=visitorGeoFromHeaders(headers());
  const accent=String(home.accent_color||'#d71920');const now=new Date().toISOString().slice(0,10);const liveAds=ads.filter(a=>isLiveAd(a,now)&&audienceMatches(a,geo));const typedAds=await Promise.all(liveAds.map(classifyAd));const rightRailAds=pickRailAds(typedAds.filter(a=>['right-rail','homepage','sitewide'].includes(a.placement)),4);
  // Homepage editorial order is deterministic: newest verified/published story is always the lead.
  // This prevents fresh stories from disappearing because of random lead-story selection.
- const lead=stories[0]||null;const secondary=stories.slice(1);const latest=secondary.slice(0,7);const below=secondary.slice(7,19);const spotlights=stories.filter((s:any)=>['indie-music-spotlight','indie-film-spotlight','indie-creator-spotlight'].includes(String(s.category||'').toLowerCase())).slice(0,6);
+ const lead=homepageStories[0]||null;const secondary=homepageStories.slice(1);const latest=secondary.slice(0,7);const below=secondary.slice(7,19);
  return <main className="site-shell ic-homepage" style={{'--ic-accent':accent} as any}><PublicHeader/>
   <div className="ic-breaking-bar"><span>INDIE CUT TRENDING</span><strong>{lead?.headline||'Entertainment, culture and independent voices'}</strong></div>
   <section className="ic-home-main"><div className="ic-home-lead-column">{lead?<article className="ic-lead-story"><div className="ic-trending-badge">LATEST</div>{lead.featured_media_url&&<a href={`/articles/${lead.slug}`} className="ic-lead-media"><Media url={lead.featured_media_url} alt={lead.headline}/></a>}<div className="ic-lead-category">{String(lead.category||'ENTERTAINMENT').toUpperCase()}</div><a href={`/articles/${lead.slug}`}><h1>{lead.headline}</h1></a>{lead.subheadline&&<p>{lead.subheadline}</p>}<div className="ic-lead-byline">{lead.author_name?`BY ${String(lead.author_name).toUpperCase()}`:'INDIE CUT EDITORIAL'}</div></article>:<article className="ic-lead-story"><div className="ic-trending-badge">LATEST</div><h1>Indie Cut</h1><p>Published stories will appear here.</p></article>}</div><aside className="ic-latest-rail"><h2>LATEST NEWS</h2><div className="ic-latest-list">{latest.map((s:any)=><a href={`/articles/${s.slug}`} key={s.id} className="ic-latest-item"><div><span>{String(s.category||'NEWS').toUpperCase()}</span>{s.published_at&&<time>{new Date(s.published_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</time>}</div><strong>{s.headline}</strong></a>)}</div>{rightRailAds.map((ad:any,i:number)=><div className="ic-rail-ad" key={ad._id||ad.id||i}><span>ADVERTISEMENT</span>{ad.creative_url&&<a href={ad.destination_url||'#'} target="_blank" rel="noreferrer sponsored"><AdCreative src={ad.creative_url} alt={ad.advertiser||'Advertisement'} mediaType={ad.creative_media_type||''} isVideo={Boolean(ad._isVideo)}/></a>}</div>)}</aside></section>
