@@ -1,6 +1,6 @@
 'use client';
 
-import {FormEvent,useEffect,useMemo,useState} from 'react';
+import {FormEvent,useEffect,useMemo,useState,type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
 import {createClient} from '../../lib/supabase/browser';
 
@@ -270,6 +270,6 @@ function RoomCard({room,tab,startRoom}:{room:Room;tab:Tab;startRoom:()=>void}){
   </article>;
 }
 
-const primaryButton:React.CSSProperties={border:0,borderRadius:999,background:'#785cff',color:'#fff',padding:'13px 18px',fontWeight:900,cursor:'pointer',whiteSpace:'nowrap'};
+const primaryButton:CSSProperties={border:0,borderRadius:999,background:'#785cff',color:'#fff',padding:'13px 18px',fontWeight:900,cursor:'pointer',whiteSpace:'nowrap'};
 
 function diffTimezoneOffset(){return new Date().getTimezoneOffset()*60_000}
