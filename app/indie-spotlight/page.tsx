@@ -1,4 +1,5 @@
 import '../home.css';
+import './spotlight.css';
 import type {Metadata} from 'next';
 import PublicHeader from '../PublicHeader';
 import PublicFooter from '../PublicFooter';
