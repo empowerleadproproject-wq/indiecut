@@ -62,7 +62,7 @@ export default function HallwayRooms(){
 
   useEffect(()=>{
     if(new URLSearchParams(location.search).get('room'))return;
-    const original=document.querySelector('section[class*="roomFeed"]') as HTMLElement|null;
+    const original=document.getElementById('cut-room-feed') as HTMLElement|null;
     if(!original)return;
     original.style.display='none';
     const node=document.createElement('div');
@@ -70,7 +70,7 @@ export default function HallwayRooms(){
     original.insertAdjacentElement('afterend',node);
     setMount(node);
 
-    const tabs=Array.from(document.querySelectorAll('div[class*="hallTabs"] > *')) as HTMLElement[];
+    const tabs=Array.from(document.querySelectorAll('#cut-hall-tabs > *')) as HTMLElement[];
     const map:Tab[]=['hallway','upcoming','mine'];
     const handlers=tabs.slice(0,3).map((el,i)=>{
       const fn=(event:Event)=>{event.preventDefault();setTab(map[i]);};
@@ -89,7 +89,7 @@ export default function HallwayRooms(){
   },[]);
 
   useEffect(()=>{
-    const tabs=Array.from(document.querySelectorAll('div[class*="hallTabs"] > *')) as HTMLElement[];
+    const tabs=Array.from(document.querySelectorAll('#cut-hall-tabs > *')) as HTMLElement[];
     const activeIndex=tab==='hallway'?0:tab==='upcoming'?1:2;
     tabs.slice(0,3).forEach((el,i)=>{
       el.style.color=i===activeIndex?'#fff':'#777';
