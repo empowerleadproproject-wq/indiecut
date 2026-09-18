@@ -7,6 +7,8 @@ import https from 'node:https';
 const PORT=Number(process.env.PORT||8080);
 const BASE_URL=(process.env.INDIECUT_BASE_URL||'https://indiecut.info').replace(/\/$/,'');
 const WORKER_TOKEN=process.env.RADIO_WORKER_TOKEN||'';
+const AUTOMATION_URL=process.env.RADIO_AUTOMATION_URL||BASE_URL+'/api/radio/automation';
+const LIVE_SESSION_URL=process.env.RADIO_LIVE_SESSION_URL||BASE_URL+'/api/radio/live-session';
 const FRAME_SAMPLES=960,FRAME_BYTES=FRAME_SAMPLES*2;
 
 const ffmpegProbe=spawnSync('ffmpeg',['-hide_banner','-encoders'],{encoding:'utf8'});
@@ -86,7 +88,7 @@ function attachEncoded(proc){
   proc.stderr.on('data',d=>{const s=String(d);if(/error|invalid|failed/i.test(s))console.error(s.slice(-1000))});
 }
 async function validateStudio(role,token,guestId){
-  const u=new URL(BASE_URL+'/api/radio/live-session');u.searchParams.set('role',role);u.searchParams.set('token',token);if(guestId)u.searchParams.set('guest_id',guestId);
+  const u=new URL(LIVE_SESSION_URL);u.searchParams.set('role',role);u.searchParams.set('token',token);if(guestId)u.searchParams.set('guest_id',guestId);
   const r=await fetch(u,{cache:'no-store'}),j=await r.json().catch(()=>({}));
   if(!r.ok||!j.authorized)throw new Error('Studio authorization failed');
   return j;
@@ -151,14 +153,14 @@ async function siteHandshake(){
 
 async function nextItem(){
   if(!WORKER_TOKEN)throw new Error('RADIO_WORKER_TOKEN is missing');
-  const r=await fetch(BASE_URL+'/api/radio/automation',{headers:{authorization:'Bearer '+WORKER_TOKEN},cache:'no-store'});
+  const r=await fetch(AUTOMATION_URL,{headers:{authorization:'Bearer '+WORKER_TOKEN},cache:'no-store'});
   const j=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(j.error||('Automation HTTP '+r.status));
   return j;
 }
 async function recordPlay(mediaId,source){
   if(!mediaId)return;
-  try{await fetch(BASE_URL+'/api/radio/automation',{method:'POST',headers:{authorization:'Bearer '+WORKER_TOKEN,'content-type':'application/json'},body:JSON.stringify({media_id:mediaId,source})})}catch{}
+  try{await fetch(AUTOMATION_URL,{method:'POST',headers:{authorization:'Bearer '+WORKER_TOKEN,'content-type':'application/json'},body:JSON.stringify({media_id:mediaId,source})})}catch{}
 }
 async function playUrl(item,source){
   return await new Promise(resolve=>{
