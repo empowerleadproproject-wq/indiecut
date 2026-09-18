@@ -1,7 +1,6 @@
 'use client';
 
 import {FormEvent,useEffect,useMemo,useState,type CSSProperties} from 'react';
-import {createPortal} from 'react-dom';
 import {createClient} from '../../lib/supabase/browser';
 
 type Tab='hallway'|'upcoming'|'mine';
@@ -63,26 +62,9 @@ export default function HallwayRooms(){
   useEffect(()=>{
     if(new URLSearchParams(location.search).get('room'))return;
     const original=document.getElementById('cut-room-feed') as HTMLElement|null;
-    const tabs=Array.from(document.querySelectorAll('#cut-hall-tabs > *')) as HTMLElement[];
-    const map:Tab[]=['hallway','upcoming','mine'];
-    const handlers=tabs.slice(0,3).map((el,i)=>{
-      const fn=(event:Event)=>{event.preventDefault();setTab(map[i]);};
-      const key=(event:KeyboardEvent)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setTab(map[i]);}};
-      el.addEventListener('click',fn);
-      el.addEventListener('keydown',key as EventListener);
-      el.setAttribute('role','button');
-      el.setAttribute('tabindex','0');
-      el.style.cursor='pointer';
-      return {el,fn,key};
-    });
-    if(original){
-      original.style.display='none';
-      setMount(original);
-    }
-    return()=>{
-      if(original)original.style.display='';
-      handlers.forEach(({el,fn,key})=>{el.removeEventListener('click',fn);el.removeEventListener('keydown',key as EventListener)});
-    };
+    if(original)original.style.display='none';
+    setMount(document.body);
+    return()=>{if(original)original.style.display=''};
   },[]);
 
   useEffect(()=>{
@@ -217,7 +199,7 @@ export default function HallwayRooms(){
 
   if(!mount)return null;
 
-  return createPortal(<section style={{maxWidth:860,margin:'0 auto',padding:'0 0 110px',color:'#fff'}}>
+  return <section style={{maxWidth:860,margin:'0 auto',padding:'0 0 110px',color:'#fff'}}>
     {notice&&<div style={{background:'#17231c',border:'1px solid #285d3a',borderRadius:14,padding:'12px 15px',margin:'0 0 16px',color:'#baf4ca',fontWeight:800,fontSize:13}}>{notice}</div>}
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:14,margin:'2px 0 18px',flexWrap:'wrap'}}>
       <div><h2 style={{fontSize:22,margin:0}}>{heading}</h2><p style={{color:'#888',fontSize:13,margin:'4px 0 0'}}>{subheading}</p></div>
@@ -260,7 +242,7 @@ export default function HallwayRooms(){
         <p style={{color:'#777',fontSize:11,textAlign:'center',lineHeight:1.4}}>{mode==='live'?'Your room appears in the Hallway immediately.':'Your room appears under Upcoming and you can start it from My Rooms.'}</p>
       </form>
     </div>}
-  </section>,mount);
+  </section>;
 }
 
 function RoomCard({room,tab,startRoom}:{room:Room;tab:Tab;startRoom:()=>void}){
