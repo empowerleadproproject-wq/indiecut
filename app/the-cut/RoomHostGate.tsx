@@ -4,7 +4,7 @@ import {useEffect,useState,type ReactNode} from 'react';
 import {createClient} from '../../lib/supabase/browser';
 
 type GateState='checking'|'open'|'waiting'|'upcoming'|'paywall'|'unavailable';
-type Premium={premium:boolean;allowed:boolean;signedIn?:boolean;admissionMode?:string;entryPriceCents?:number;productKind?:string;productName?:string;productPriceCents?:number};
+type Premium={premium:boolean;allowed:boolean;signedIn?:boolean;admissionMode?:string;entryPriceCents?:number;productKind?:string;productName?:string;productPriceCents?:number;purchasedProduct?:boolean};
 
 function getClientId(){
   const key='indiecut_cut_client_id';
@@ -111,7 +111,7 @@ export default function RoomHostGate({children}:{children:ReactNode}){
     }
   }
 
-  if(state==='open')return <>{children}</>;
+  if(state==='open')return <>{children}{premium?.purchasedProduct&&premium?.productKind==='ebook'&&<a href={'/api/the-cut/digital-product?room='+encodeURIComponent(new URLSearchParams(window.location.search).get('room')||'')} style={{position:'fixed',right:16,bottom:82,zIndex:220,borderRadius:999,background:'#fff',color:'#111',padding:'11px 15px',fontWeight:900,textDecoration:'none'}}>Download {premium.productName||'E-book'}</a>}</>;
 
   const title=state==='checking'?'Checking the room…'
     :state==='waiting'?'Please wait while the host opens the room.'
