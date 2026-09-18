@@ -1,0 +1,3 @@
+import type {Metadata} from 'next';import PublicHeader from '../PublicHeader';import PublicFooter from '../PublicFooter';import DistributionPage from './DistributionPage';import './distribution.css';
+export const metadata:Metadata={title:'Film Distribution | Indie Cut',description:'Submit an independent film to Indie Cut for distribution and licensing consideration.',alternates:{canonical:'/distribution'}};
+export default function Page(){return <main className="dist"><PublicHeader/><DistributionPage/><PublicFooter/></main>}
