@@ -1,6 +1,6 @@
 import express from 'express';
 import {WebSocketServer} from 'ws';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import http from 'node:http';
 import https from 'node:https';
 
@@ -9,17 +9,17 @@ const BASE_URL=(process.env.INDIECUT_BASE_URL||'https://indiecut.info').replace(
 const WORKER_TOKEN=process.env.RADIO_WORKER_TOKEN||'';
 const FRAME_SAMPLES=960,FRAME_BYTES=FRAME_SAMPLES*2;
 
-const app=express(),server=http.createServer(app),wss=new WebSocketServer({server,path:'/live'});
+const ffmpegProbe=spawnSync('ffmpeg',['-hide_banner','-encoders'],{encoding:'utf8'});\nconst ffmpegReady=ffmpegProbe.status===0&&String(ffmpegProbe.stdout||'').includes('libmp3lame');\nif(!ffmpegReady)console.error('FFmpeg/libmp3lame readiness check failed',String(ffmpegProbe.stderr||'').slice(-1000));\n\nconst app=express(),server=http.createServer(app),wss=new WebSocketServer({server,path:'/live'});
 const listeners=new Set();
 const peers=new Map();
 
 let automationProc=null,liveEncoder=null,liveSessionId=null,nowPlaying=null,sourceMode='idle',icecastReq=null,stopping=false,testProc=null;
 
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const status=()=>({ok:true,mode:sourceMode,live_session_id:liveSessionId,stream_clients:listeners.size,studio_clients:peers.size,now_playing:nowPlaying,live365_configured:Boolean(process.env.LIVE365_HOST&&process.env.LIVE365_PASSWORD)});
+const status=()=>({ok:ffmpegReady,ffmpeg_ready:ffmpegReady,mode:sourceMode,live_session_id:liveSessionId,stream_clients:listeners.size,studio_clients:peers.size,now_playing:nowPlaying,live365_configured:Boolean(process.env.LIVE365_HOST&&process.env.LIVE365_PASSWORD)});
 
 app.use(express.json({limit:'64kb'}));
-app.get('/health',(_req,res)=>res.json(status()));
+app.get('/health',(_req,res)=>res.status(ffmpegReady?200:503).json(status()));
 app.get('/status',(_req,res)=>res.json(status()));
 app.get('/stream.mp3',(req,res)=>{
   res.writeHead(200,{'Content-Type':'audio/mpeg','Cache-Control':'no-store, no-cache','Connection':'keep-alive','Access-Control-Allow-Origin':'*','icy-name':'Indie Cut Radio','icy-br':'128'});
