@@ -3,7 +3,8 @@
 import {useEffect,useState,type ReactNode} from 'react';
 import {createClient} from '../../lib/supabase/browser';
 
-type GateState='checking'|'open'|'waiting'|'upcoming'|'unavailable';
+type GateState='checking'|'open'|'waiting'|'upcoming'|'paywall'|'unavailable';
+type Premium={premium:boolean;allowed:boolean;signedIn?:boolean;admissionMode?:string;entryPriceCents?:number;productKind?:string;productName?:string;productPriceCents?:number};
 
 function getClientId(){
   const key='indiecut_cut_client_id';
@@ -29,6 +30,8 @@ export default function RoomHostGate({children}:{children:ReactNode}){
   const[viewerIsHost,setViewerIsHost]=useState(false);
   const[starting,setStarting]=useState(false);
   const[error,setError]=useState('');
+  const[premium,setPremium]=useState<Premium|null>(null);
+  const[paying,setPaying]=useState(false);
 
   useEffect(()=>{
     let alive=true;
@@ -53,6 +56,8 @@ export default function RoomHostGate({children}:{children:ReactNode}){
         }
 
         setRoomTitle(String(data.title||''));
+        const pr=await fetch('/api/the-cut/premium-status?room='+encodeURIComponent(slug),{cache:'no-store'}).then(r=>r.json()).catch(()=>null);
+        if(pr?.premium){setPremium(pr);if(!pr.allowed){setState('paywall');setError('');return}}else setPremium(null);
         setScheduledFor(String(data.scheduledFor||data.scheduled_for||''));
         setViewerIsHost(!!data.viewer_is_host);
         setError('');
@@ -85,6 +90,11 @@ export default function RoomHostGate({children}:{children:ReactNode}){
     };
   },[]);
 
+  async function checkout(choice:'entry'|'product'){
+    const slug=new URLSearchParams(window.location.search).get('room');if(!slug||paying)return;setPaying(true);setError('');
+    try{const r=await fetch('/api/the-cut/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({roomSlug:slug,choice})});const j=await r.json();if(!r.ok)throw new Error(j.error||'Checkout could not start');if(j.url)location.href=j.url;else throw new Error('Checkout URL unavailable')}catch(e:any){setError(e.message||'Checkout could not start');setPaying(false)}
+  }
+
   async function startRoom(){
     const slug=new URLSearchParams(window.location.search).get('room');
     if(!slug||starting)return;
@@ -106,6 +116,7 @@ export default function RoomHostGate({children}:{children:ReactNode}){
   const title=state==='checking'?'Checking the room…'
     :state==='waiting'?'Please wait while the host opens the room.'
     :state==='upcoming'?'Scheduled room'
+    :state==='paywall'?'Premium Room'
     :'Room unavailable';
 
   return <main style={{minHeight:'100dvh',background:'#000',color:'#fff',display:'grid',placeItems:'center',padding:24,fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif',boxSizing:'border-box'}}>
@@ -119,6 +130,7 @@ export default function RoomHostGate({children}:{children:ReactNode}){
       {state==='checking'&&<p style={{color:'#9da4af',margin:'0 0 20px'}}>One moment.</p>}
       {state==='waiting'&&<p style={{color:'#9da4af',lineHeight:1.5,margin:'0 0 22px'}}>This room will open automatically as soon as the host is live.</p>}
       {state==='upcoming'&&<p style={{color:'#9da4af',lineHeight:1.5,margin:'0 0 22px'}}>{scheduledFor?`Scheduled for ${formatSchedule(scheduledFor)}. `:''}{viewerIsHost?'You are the host. Start it whenever you are ready.':'This room will open when the host starts it.'}</p>}
+      {state==='paywall'&&<div style={{margin:'16px 0 22px'}}>{!premium?.signedIn?<p style={{color:'#9da4af'}}>Sign in to purchase access to this premium room.</p>:<><p style={{color:'#9da4af'}}>Choose how you want to enter.</p><div style={{display:'grid',gap:10}}>{premium?.admissionMode!=='purchase_required'&&<button disabled={paying} onClick={()=>checkout('entry')} style={{border:0,borderRadius:999,background:'#785cff',color:'#fff',padding:13,fontWeight:900,cursor:'pointer'}}>Pay ${(Number(premium?.entryPriceCents||0)/100).toFixed(2)} Entry</button>}{premium?.admissionMode!=='entry_fee'&&<button disabled={paying} onClick={()=>checkout('product')} style={{border:'1px solid #444',borderRadius:999,background:'#171a20',color:'#fff',padding:13,fontWeight:900,cursor:'pointer'}}>Buy {premium?.productName||'Package'} — ${(Number(premium?.productPriceCents||0)/100).toFixed(2)}</button>}</div>{premium?.productKind==='physical'&&<small style={{display:'block',color:'#777',marginTop:10}}>Shipping address is collected securely at checkout. The host fulfills physical orders.</small>}</>}</div>}
       {state==='unavailable'&&<p style={{color:'#9da4af',lineHeight:1.5,margin:'0 0 22px'}}>This room may have ended or the link is no longer active.</p>}
       {error&&<p style={{color:'#ff8397',fontWeight:700,fontSize:13,lineHeight:1.4}}>{error}</p>}
       {state==='upcoming'&&viewerIsHost&&<button onClick={startRoom} disabled={starting} style={{display:'inline-block',border:0,borderRadius:999,background:'#785cff',color:'#fff',fontWeight:900,padding:'13px 20px',margin:'0 8px 10px',cursor:'pointer',opacity:starting?.65:1}}>{starting?'Starting…':'Start Room'}</button>}
