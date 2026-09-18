@@ -1,5 +1,33 @@
 import {NextResponse} from 'next/server';
 import {createClient as createServiceClient} from '@supabase/supabase-js';
-export const dynamic='force-dynamic';export const revalidate=0;
+
+export const dynamic='force-dynamic';
+export const revalidate=0;
+
 const fallback={enabled:false,station_name:'Indie Cut Radio',tagline:'Independent music. Culture. Live voices.',stream_url:'',worker_url:'',now_playing:'Indie Cut Radio',artwork_url:'',accent:'#d7ff38'};
-export async function GET(){const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)return NextResponse.json(fallback,{headers:{'cache-control':'no-store'}});const db=createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});const {data}=await db.from('site_settings').select('setting_value').eq('setting_key','indiecut_radio').maybeSingle();let value:any=fallback;try{const parsed=JSON.parse(data?.setting_value||'{}');value={...fallback,...parsed};delete value.worker_token}catch{}return NextResponse.json(value,{headers:{'cache-control':'no-store, max-age=0'}})}
+
+export async function GET(){
+ const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+ if(!url||!key)return NextResponse.json(fallback,{headers:{'cache-control':'no-store'}});
+ const db=createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+ const {data}=await db.from('site_settings').select('setting_value').eq('setting_key','indiecut_radio').maybeSingle();
+ let value:any=fallback;
+ try{value={...fallback,...JSON.parse(data?.setting_value||'{}')}}catch{}
+ if(value.worker_url){
+  try{
+   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),1500);
+   const r=await fetch(String(value.worker_url).replace(/\/$/,'')+'/status',{cache:'no-store',signal:controller.signal});
+   clearTimeout(timer);
+   if(r.ok){
+    const s:any=await r.json();
+    if(s?.now_playing?.title){
+      value.now_playing=[s.now_playing.title,s.now_playing.artist].filter(Boolean).join(' — ');
+    }else if(s?.mode==='live'){
+      value.now_playing='Live on Indie Cut Radio';
+    }
+   }
+  }catch{}
+ }
+ delete value.worker_token;
+ return NextResponse.json(value,{headers:{'cache-control':'no-store, max-age=0'}});
+}
