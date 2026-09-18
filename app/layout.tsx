@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import WebsiteAnalyticsTracker from './WebsiteAnalyticsTracker';
 import MarketingPixels from './MarketingPixels';
+import IndieCutRadioPlayer from './IndieCutRadioPlayer';
 
 const SITE_URL='https://indiecut.info';
 const SITE_DESCRIPTION='Verified entertainment journalism covering film, television, music, culture, celebrity news and independent creators.';
@@ -69,5 +70,5 @@ const siteJsonLd={
 };
 
 export default function RootLayout({children}:{children:React.ReactNode}){
-  return <html lang="en"><body><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(siteJsonLd).replace(/</g,'\\u003c')}}/><Suspense fallback={null}><WebsiteAnalyticsTracker/><MarketingPixels/></Suspense>{children}</body></html>;
+  return <html lang="en"><body><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(siteJsonLd).replace(/</g,'\\u003c')}}/><Suspense fallback={null}><WebsiteAnalyticsTracker/><MarketingPixels/></Suspense>{children}<IndieCutRadioPlayer/></body></html>;
 }
