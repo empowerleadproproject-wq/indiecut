@@ -20,13 +20,13 @@ function r2Config(){
 
 export async function POST(request:Request){
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL;const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)return NextResponse.json({error:'Upload service is not configured.'},{status:503});
- const body=await request.json().catch(()=>null);const fileName=String(body?.fileName||'upload.bin');const mime=String(body?.mime||'application/octet-stream');const size=Number(body?.size||0);const kind=String(body?.kind||'');
- const isImage=mime.startsWith('image/'),isAudio=mime.startsWith('audio/');if((kind==='image'&&!isImage)||(kind==='audio'&&!isAudio)||(!isImage&&!isAudio))return NextResponse.json({error:'Only artist images and audio files can be uploaded.'},{status:400});
+ const body=await request.json().catch(()=>null);const fileName=String(body?.fileName||'upload.bin');const mime=String(body?.mime||'application/octet-stream').toLowerCase();const size=Number(body?.size||0);const kind=String(body?.kind||'');const extension=ext(fileName);
+ const isImage=mime.startsWith('image/'),isSong=['.mp3','.mp4','.wav'].includes(extension)&&(['audio/mpeg','audio/mp3','audio/mp4','audio/x-m4a','audio/wav','audio/x-wav','audio/wave','video/mp4','application/mp4','application/octet-stream'].includes(mime)||mime.startsWith('audio/'));if((kind==='image'&&!isImage)||(kind==='audio'&&!isSong)||(!isImage&&!isSong))return NextResponse.json({error:'Songs must be MP3, MP4, or WAV files. Artist photos must be image files.'},{status:400});
  const max=isImage?8*1024*1024:100*1024*1024;if(size<=0||size>max)return NextResponse.json({error:isImage?'Artist photo must be 8 MB or smaller.':'Song upload must be 100 MB or smaller.'},{status:413});
  const db=createServiceClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});const ipHash=hash(ipFor(request));const now=Date.now();
  const {data:rateRow}=await db.from('site_settings').select('setting_value').eq('setting_key','battle_upload_issuances').maybeSingle();let rates:any[]=[];try{rates=JSON.parse(rateRow?.setting_value||'[]')}catch{}rates=rates.filter(x=>new Date(x.at||0).getTime()>now-24*60*60*1000);if(rates.filter(x=>x.ip_hash===ipHash).length>=8)return NextResponse.json({error:'Upload limit reached for today.'},{status:429});
 
- if(isAudio){
+ if(isSong){
   const cfg=r2Config();
   if(cfg){
    const path=`indiecut/audio/battle-submissions/${new Date().toISOString().slice(0,10)}/${crypto.randomUUID()}${ext(fileName)}`;
