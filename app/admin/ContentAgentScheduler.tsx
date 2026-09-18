@@ -6,7 +6,7 @@ const hourLabel=(h:number)=>{const hour=h%12||12;return `${hour}:00 ${h<12?'AM':
 const dayNames=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
 export default function ContentAgentScheduler(){
- const [config,setConfig]=useState<any>({enabled:true,default_topic:'top current entertainment news involving Black culture, movies, television, music, celebrities and independent creators',default_count:3,frequency:'daily',cron_hour:9,cron_day:1,cron_timezone:'America/New_York'});
+ const [config,setConfig]=useState<any>({enabled:true,default_topic:'top current entertainment news involving Black culture, movies, television, music and celebrities',default_count:3,frequency:'daily',cron_hour:9,cron_day:1,cron_timezone:'America/New_York'});
  const [diag,setDiag]=useState<any>(null);
  const [busy,setBusy]=useState(false);const [running,setRunning]=useState(false);const [message,setMessage]=useState('');
 
