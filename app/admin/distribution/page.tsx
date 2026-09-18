@@ -1,0 +1,2 @@
+import {redirect} from 'next/navigation';import {createClient} from '../../../lib/supabase/server';import {isAdminEmail} from '../../../lib/admin';import DistributionAdmin from './DistributionAdmin';
+export const dynamic='force-dynamic';export default async function Page(){const a=createClient();const{data:{user}}=await a.auth.getUser();if(!user)redirect('/admin/login');if(!isAdminEmail(user.email))redirect('/');return <DistributionAdmin/>}
