@@ -8,7 +8,7 @@ function db(){return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!,p
 function isLiveAd(ad:any,now:string){return ad?.active!==false&&(!ad.start_date||ad.start_date<=now)&&(!ad.end_date||ad.end_date>=now)}
 function normalizedPlacement(ad:any){return String(ad?.placement||'').trim().toLowerCase()}
 function isVideoCreative(ad:any){const mime=String(ad?.creative_media_type||'').trim().toLowerCase();const url=String(ad?.creative_url||'').split('?')[0].toLowerCase();return mime.startsWith('video/')||/\.(mp4|webm|mov|m4v|ogv)$/.test(url)}
-function placementMatches(ad:any,requested:string){if(!requested)return true;const placement=normalizedPlacement(ad),want=requested.trim().toLowerCase();if(placement===want||placement==='sitewide')return true;
+function placementMatches(ad:any,requested:string){if(!requested)return true;const placement=normalizedPlacement(ad),want=requested.trim().toLowerCase();if(placement===want)return true;if(want!=='cut-room-banner'&&placement==='sitewide')return true;
  // Older video campaigns were sometimes saved under a display placement. Keep them eligible
  // for Watch so every active commercial participates in the streaming rotation.
  if(want==='video-midroll'&&isVideoCreative(ad))return true;
