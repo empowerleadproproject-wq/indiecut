@@ -15,11 +15,12 @@ export default function CutBannerAds(){
  const[index,setIndex]=useState(0);
  const seen=useRef(new Set<string>());
  const roomSlug=typeof window!=='undefined'?new URLSearchParams(window.location.search).get('room')||'hallway':'hallway';
+ const inRoom=roomSlug!=='hallway';
 
  useEffect(()=>{let dead=false;fetch(`/api/public/ads?placement=cut-room-banner&t=${Date.now()}`,{cache:'no-store'}).then(r=>r.json()).then(j=>{if(!dead)setAds((Array.isArray(j?.ads)?j.ads:[]).filter((a:any)=>a?._id&&a?.creative_url))}).catch(()=>{});return()=>{dead=true}},[]);
  useEffect(()=>{if(ads.length<2)return;const timer=window.setInterval(()=>setIndex(i=>(i+1)%ads.length),20000);return()=>window.clearInterval(timer)},[ads.length]);
  useEffect(()=>{const ad=ads[index];if(!ad||seen.current.has(ad._id))return;seen.current.add(ad._id);createClient().rpc('cut_track_banner_ad_event',{p_ad_id:ad._id,p_room_slug:roomSlug,p_event_type:'impression',p_client_id:clientId()}).then(()=>{})},[ads,index,roomSlug]);
- if(!ads.length)return null;
+ if(!inRoom||!ads.length)return null;
  const ad=ads[index];
  const click=()=>createClient().rpc('cut_track_banner_ad_event',{p_ad_id:ad._id,p_room_slug:roomSlug,p_event_type:'click',p_client_id:clientId()}).then(()=>{});
  const creative=<img src={ad.creative_url} alt={ad.advertiser||ad.title||'Advertisement'} style={{display:'block',width:'100%',height:'auto',aspectRatio:'6 / 1',objectFit:'cover'}}/>;
