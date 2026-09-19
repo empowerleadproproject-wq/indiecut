@@ -64,7 +64,12 @@ export async function GET(req:Request){
     const {data}=await x.from('radio_media').select('*').eq('active',true).eq('kind',kind);
     const filtered=imagingType?(data||[]).filter((z:any)=>z.imaging_type===imagingType):(data||[]);
     if(!filtered.length)return null;
-    return filtered[Math.floor(Math.random()*filtered.length)];
+    // Rotate least-recently-played first so multiple drops/ads do not repeat randomly.
+    const lastPlayed=new Map<string,number>();
+    for(const q of h){if(q.media_id&&!lastPlayed.has(q.media_id))lastPlayed.set(q.media_id,new Date(q.played_at).getTime())}
+    const oldest=Math.min(...filtered.map((z:any)=>lastPlayed.get(z.id)??0));
+    const pool=filtered.filter((z:any)=>(lastPlayed.get(z.id)??0)===oldest);
+    return pool[Math.floor(Math.random()*pool.length)];
   }
 
   const {data:imagingRules}=await x.from('radio_imaging_rules').select('*').eq('active',true).order('created_at');
