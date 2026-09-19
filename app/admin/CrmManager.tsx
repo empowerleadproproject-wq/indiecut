@@ -55,7 +55,8 @@ export default function CrmManager(){
  const selectedActivity=editing?.id?(data.activity||[]).filter((x:any)=>x.contact_id===editing.id):[];
  const contactById=(id:string)=>(data.contacts||[]).find((c:any)=>c.id===id);
 
- function openContact(c:any){setEditing({...c,tags:c.tags||[]});setEmailDraft({subject:'',body:''});setNote('')}\n async function copyText(value:string,label:string){try{await navigator.clipboard.writeText(value);setMessage(`${label} copied.`)}catch{setMessage(value)}}
+ function openContact(c:any){setEditing({...c,tags:c.tags||[]});setEmailDraft({subject:'',body:''});setNote('')}
+ async function copyText(value:string,label:string){try{await navigator.clipboard.writeText(value);setMessage(`${label} copied.`)}catch{setMessage(value)}}
  function toggleSelect(id:string){setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id])}
  function toggleAll(){const ids=contacts.map((c:any)=>c.id);setSelected(v=>ids.every((id:string)=>v.includes(id))?v.filter(id=>!ids.includes(id)):Array.from(new Set([...v,...ids])))}
  function applySmart(s:any){setStatus(s.filter_status||'');setGenre(s.filter_genre||'');setTagFilter(s.filter_tag||'');setQuery('');setView('contacts')}
