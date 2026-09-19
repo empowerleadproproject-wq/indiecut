@@ -1,6 +1,5 @@
 'use client';
 import {useEffect,useState} from 'react';
-import {createClient as createBrowserClient} from '../../lib/supabase/browser';
 
 export default function RadioProgramming(){
  const [d,setD]=useState<any>({media:[],schedule:[],rotations:[]}),[msg,setMsg]=useState(''),[uploading,setUploading]=useState(false);
@@ -12,8 +11,8 @@ export default function RadioProgramming(){
  async function upload(file?:File){
   if(!file)return;setUploading(true);setMsg('Uploading audio…');
   try{
-   const r=await fetch('/api/admin/upload',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:file.name,type:file.type,size:file.size})});const j=await r.json();if(!r.ok)throw new Error(j.error||'Upload setup failed');
-   const sb=createBrowserClient();const {error}=await sb.storage.from(j.bucket).uploadToSignedUrl(j.path,j.token,file,{contentType:file.type||'audio/mpeg'});if(error)throw error;
+   const form=new FormData();form.append('file',file);
+   const r=await fetch('/api/admin/upload',{method:'POST',body:form});const j=await r.json();if(!r.ok)throw new Error(j.error||'Audio upload failed');
    setMedia((v:any)=>({...v,audio_url:j.publicUrl,title:v.title||file.name.replace(/\.[^.]+$/,'')}));setMsg('Audio uploaded. Add the title/artist, then save it to the library.');
   }catch(e:any){setMsg(e?.message||'Audio upload failed.')}finally{setUploading(false)}
  }
