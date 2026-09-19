@@ -40,7 +40,7 @@ function cleanSocial(value:any,network:SocialNetwork){
 }
 
 async function snapshot(db:any){
- const [{data:contactsRaw},{data:templates},{data:campaigns},{data:activity},{data:smartLists},{data:tasks},{data:opportunities},{count:queued},{count:sent},{count:failed}]=await Promise.all([
+ const [{data:contacts},{data:templates},{data:campaigns},{data:activity},{data:smartLists},{data:tasks},{data:opportunities},{count:queued},{count:sent},{count:failed}]=await Promise.all([
   db.from('crm_contacts').select('*').order('updated_at',{ascending:false}).limit(1000),
   db.from('crm_email_templates').select('*').order('updated_at',{ascending:false}).limit(100),
   db.from('crm_email_campaigns').select('*').order('created_at',{ascending:false}).limit(100),
@@ -52,7 +52,24 @@ async function snapshot(db:any){
   db.from('crm_email_queue').select('*',{count:'exact',head:true}).eq('status','sent'),
   db.from('crm_email_queue').select('*',{count:'exact',head:true}).eq('status','failed')
  ]);
- const contacts=contactsRaw||[];const entryIds=Array.from(new Set(contacts.map((x:any)=>x.battle_entry_id).filter(Boolean)));const entryMap=new Map<string,any>();if(entryIds.length){const {data:entries}=await db.from('battle_entries').select('id,slug,contest_id').in('id',entryIds);const contestIds=Array.from(new Set((entries||[]).map((x:any)=>x.contest_id).filter(Boolean)));const contestMap=new Map<string,any>();if(contestIds.length){const {data:cs}=await db.from('battle_contests').select('id,slug').in('id',contestIds);for(const x of cs||[])contestMap.set(x.id,x)}for(const e of entries||[]){const contest=contestMap.get(e.contest_id);entryMap.set(e.id,{...e,fan_path:contest?.slug?`/battles/${contest.slug}/artists/${e.slug}`:null})}}const enriched=contacts.map((x:any)=>{const e=x.battle_entry_id?entryMap.get(x.battle_entry_id):null;return {...x,fan_path:e?.fan_path||null}});\n return {contacts:enriched,templates:templates||[],campaigns:campaigns||[],activity:activity||[],smartLists:smartLists||[],tasks:tasks||[],opportunities:opportunities||[],queueStats:{queued:queued||0,sent:sent||0,failed:failed||0},integrations:{email:Boolean(process.env.RESEND_API_KEY&&process.env.INDIECUT_FROM_EMAIL),ghl:Boolean(process.env.GHL_PRIVATE_INTEGRATION_TOKEN&&process.env.GHL_LOCATION_ID)}};
+ const rows=contacts||[];
+ const entryIds=Array.from(new Set(rows.map((x:any)=>x.battle_entry_id).filter(Boolean))) as string[];
+ const entryMap=new Map<string,{fan_path:string|null}>();
+ if(entryIds.length){
+  const {data:entries}=await db.from('battle_entries').select('id,slug,contest_id').in('id',entryIds);
+  const contestIds=Array.from(new Set((entries||[]).map((x:any)=>x.contest_id).filter(Boolean))) as string[];
+  const contestMap=new Map<string,string>();
+  if(contestIds.length){
+   const {data:contests}=await db.from('battle_contests').select('id,slug').in('id',contestIds);
+   for(const contest of contests||[])contestMap.set(contest.id,contest.slug);
+  }
+  for(const entry of entries||[]){
+   const contestSlug=contestMap.get(entry.contest_id);
+   entryMap.set(entry.id,{fan_path:contestSlug?`/battles/${contestSlug}/artists/${entry.slug}`:null});
+  }
+ }
+ const enriched=rows.map((contact:any)=>({...contact,fan_path:contact.battle_entry_id?entryMap.get(contact.battle_entry_id)?.fan_path||null:null}));
+ return {contacts:enriched,templates:templates||[],campaigns:campaigns||[],activity:activity||[],smartLists:smartLists||[],tasks:tasks||[],opportunities:opportunities||[],queueStats:{queued:queued||0,sent:sent||0,failed:failed||0},integrations:{email:Boolean(process.env.RESEND_API_KEY&&process.env.INDIECUT_FROM_EMAIL),ghl:Boolean(process.env.GHL_PRIVATE_INTEGRATION_TOKEN&&process.env.GHL_LOCATION_ID)}};
 }
 
 async function sendEmail(to:string,subject:string,body:string){
