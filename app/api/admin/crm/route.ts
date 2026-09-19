@@ -40,7 +40,7 @@ function cleanSocial(value:any,network:SocialNetwork){
 }
 
 async function snapshot(db:any){
- const [{data:contacts},{data:templates},{data:campaigns},{data:activity},{data:smartLists},{data:tasks},{data:opportunities},{count:queued},{count:sent},{count:failed}]=await Promise.all([
+ const [{data:contactsRaw},{data:templates},{data:campaigns},{data:activity},{data:smartLists},{data:tasks},{data:opportunities},{count:queued},{count:sent},{count:failed}]=await Promise.all([
   db.from('crm_contacts').select('*').order('updated_at',{ascending:false}).limit(1000),
   db.from('crm_email_templates').select('*').order('updated_at',{ascending:false}).limit(100),
   db.from('crm_email_campaigns').select('*').order('created_at',{ascending:false}).limit(100),
